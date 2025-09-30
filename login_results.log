@@ -1,0 +1,23 @@
+2025-09-30 11:25:39,967 - ERROR - Error cargando credenciales: 'utf-8' codec can't decode byte 0xd1 in position 5: invalid continuation byte
+2025-09-30 11:27:33,995 - INFO - CSV leído con codificación: latin-1
+2025-09-30 11:30:35,233 - INFO - CSV leído con codificación: utf-8
+2025-09-30 11:30:35,234 - INFO - Columnas del CSV: ['usuario;password']
+2025-09-30 11:31:30,196 - INFO - CSV leído - Encoding: utf-8, Separador: ;
+2025-09-30 11:31:30,196 - INFO - Columnas del CSV: ['usuario', 'password']
+2025-09-30 11:31:30,213 - INFO - Credenciales cargadas: 1419
+2025-09-30 11:31:30,214 - INFO - ====== WebDriver manager ======
+2025-09-30 11:31:32,065 - INFO - Get LATEST chromedriver version for google-chrome
+2025-09-30 11:32:56,488 - INFO - Get LATEST chromedriver version for google-chrome
+2025-09-30 11:34:20,786 - INFO - There is no [win64] chromedriver "140.0.7339.207" for browser google-chrome "140.0.7339" in cache
+2025-09-30 11:34:20,786 - INFO - Get LATEST chromedriver version for google-chrome
+2025-09-30 11:37:09,507 - INFO - WebDriver version 140.0.7339.207 selected
+2025-09-30 11:37:09,515 - INFO - Modern chrome version https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.207/win32/chromedriver-win32.zip
+2025-09-30 11:37:09,515 - INFO - About to download new driver from https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.207/win32/chromedriver-win32.zip
+2025-09-30 11:38:33,964 - INFO - Driver downloading response is 200
+2025-09-30 11:38:34,598 - INFO - Get LATEST chromedriver version for google-chrome
+2025-09-30 11:39:59,357 - INFO - Driver has been saved in cache [C:\Users\marcos\.wdm\drivers\chromedriver\win64\140.0.7339.207]
+2025-09-30 11:43:55,440 - WARNING - Programa interrumpido por el usuario
+2025-09-30 11:43:59,471 - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x000001A4A9976490>: Failed to establish a new connection: [WinError 10061] No se puede establecer una conexión ya que el equipo de destino denegó expresamente dicha conexión')': /session/99838ff08924029470ecfd5a17ac0c2a
+2025-09-30 11:44:03,540 - WARNING - Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x000001A4A9976350>: Failed to establish a new connection: [WinError 10061] No se puede establecer una conexión ya que el equipo de destino denegó expresamente dicha conexión')': /session/99838ff08924029470ecfd5a17ac0c2a
+2025-09-30 11:44:07,571 - WARNING - Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<urllib3.connection.HTTPConnection object at 0x000001A4A9A4C640>: Failed to establish a new connection: [WinError 10061] No se puede establecer una conexión ya que el equipo de destino denegó expresamente dicha conexión')': /session/99838ff08924029470ecfd5a17ac0c2a
+2025-09-30 11:44:11,635 - INFO - Programa finalizado
